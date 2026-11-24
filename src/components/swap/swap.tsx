@@ -135,9 +135,9 @@ export const Swap = () => {
       <div className="bridge-heading">
         <h1>{onBch ? tOnBch('heading') : tBridge(openNetworks ? 'headingOpen' : reverse ? 'headingReverse' : 'heading')}</h1>
       </div>
-      {/* One row: Manual/Router, then refresh/settings. Any network lives in the BCH asset picker. */}
+      {/* One row: Manual/Router (not for a swap on Bitcoin Cash, which neither bridges), then refresh/settings. Any network lives in the BCH asset picker. */}
       <div className="bridge-tools mb-3 flex flex-nowrap items-center gap-2 overflow-x-auto">
-        <RouterSelector />
+        {!onBch && <RouterSelector />}
         <div className="ml-auto flex shrink-0 items-center gap-2">
           <RefreshButton />
           <SwapSettings />
