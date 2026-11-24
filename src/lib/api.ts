@@ -208,11 +208,11 @@ const postQuote = async (request: QuoteRequest, abortController?: AbortControlle
 }
 
 // THORChain still quotes during a signing or outbound halt, while it holds every payout and refund on the chain, so a
-// quote is refused then. Read with fetch beside the quote; a mimir that does not answer blocks nothing.
+// quote is refused then. Read with fetch beside the quote; a mimir that fails or does not answer within 10 s blocks nothing.
 const quoteWhilePayoutsRun = async (request: QuoteRequest, abortController?: AbortController) => {
   const [quote, held] = await Promise.all([
     postQuote(request, abortController),
-    fetch('https://gateway.liquify.com/chain/thorchain_api/thorchain/mimir', { signal: abortController?.signal })
+    fetch('https://gateway.liquify.com/chain/thorchain_api/thorchain/mimir', { signal: AbortSignal.timeout(10_000) })
       .then(res => (res.ok ? res.json() : undefined))
       .then(mimir => !!mimir && thorchainPayoutsHalted(mimir, [request.sellAsset, request.buyAsset]))
       .catch(() => false)
