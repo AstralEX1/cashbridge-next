@@ -3,6 +3,7 @@ import { apiError, methodNotAllowed } from '@/lib/api-error'
 import { rateLimit } from '@/lib/rate-limit'
 import { isSameOrigin } from '@/lib/same-origin'
 import { readRequestBody } from '@/lib/request-body'
+import { REFERRAL } from '@/lib/near-intents'
 
 // Server-side proxy for NEAR Intents' 1Click API. The partner JWT (NEAR_INTENTS_JWT) stays on the
 // server; the browser talks to /api/near-intents/v0/* and this route adds Authorization when set.
@@ -63,11 +64,15 @@ async function forward(req: NextRequest, path: string[], method: 'GET' | 'POST')
     if (typeof payload !== 'string') return payload
     body = payload
     if (body) {
+      let parsed: { appFees?: unknown; referral?: unknown } | null
       try {
-        JSON.parse(body)
+        parsed = JSON.parse(body)
       } catch {
         return apiError(400, 'bad_request', 'Body must be JSON', 'Send a JSON request body.')
       }
+      // The partner JWT pays for this site's quotes only: no fee for someone else, no other referral.
+      if (target.path === 'quote' && parsed && typeof parsed === 'object' && (parsed.appFees !== undefined || (parsed.referral ?? REFERRAL) !== REFERRAL))
+        return apiError(400, 'bad_request', 'Unsupported quote fields', `This proxy quotes for this site only: no appFees, and referral "${REFERRAL}" or none.`)
     }
   }
 

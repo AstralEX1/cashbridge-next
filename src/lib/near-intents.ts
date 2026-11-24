@@ -30,7 +30,7 @@ const nearEndpoint = (): [string, Record<string, string>] =>
 export const NEAR_BCH = 'nep141:bch.omft.near'
 
 // The quote names this site as the venue (letters, digits and single - _ . only). No app fee is asked.
-const REFERRAL = 'cashbridge'
+export const REFERRAL = 'cashbridge'
 
 // The refund starts at the deadline, which "must exceed the time required for the deposit transaction to be mined. For
 // example, Bitcoin may require around one hour" (1Click): two hours going in, still inside a contract order's three.
