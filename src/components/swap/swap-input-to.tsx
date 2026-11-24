@@ -101,7 +101,7 @@ export const SwapInputTo = ({ selecting, onSelectOpenChange }: BridgeInputProps)
           </div>
         </section>
       </div>
-      <div className="bridge-input-switcher__slot bridge-input-switcher__picker-slot" aria-hidden={!selecting} inert={!selecting}>
+      <div className="bridge-input-switcher__slot" aria-hidden={!selecting} inert={!selecting}>
         <BridgeAssetPicker side="to" bch={!openNetworks} open={selecting} onClose={close} />
       </div>
     </BridgeInputSwitcher>

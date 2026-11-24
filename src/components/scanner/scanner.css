@@ -83,9 +83,11 @@
   font-weight: 600;
   transition: border-color 160ms var(--ease-out), color 160ms var(--ease-out), transform 160ms var(--ease-out);
 }
-.scanner-help:hover {
-  border-color: var(--green);
-  color: var(--text);
+@media (hover: hover) and (pointer: fine) {
+  .scanner-help:hover {
+    border-color: var(--green);
+    color: var(--text);
+  }
 }
 .scanner-help:active {
   transform: scale(0.97);

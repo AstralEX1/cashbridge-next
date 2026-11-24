@@ -78,7 +78,7 @@ export const SwapSettings = () => {
           size="small"
           aria-label={`${t('tab.swap')}: ${t('settings.priceProtection')}`}
           icon={<Icon name="manage" />}
-          className="bg-btn-style-1-bg"
+          className="bg-btn-style-1-bg relative after:absolute after:-inset-1"
         />
       </DropdownMenuTrigger>
       <DropdownMenuContent className="max-w-sm p-8">

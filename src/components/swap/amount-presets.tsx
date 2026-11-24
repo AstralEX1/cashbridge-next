@@ -5,7 +5,7 @@ import { useTranslations } from 'next-intl'
 import { PRESET_PERCENTS } from '@/lib/amount-presets'
 
 // Longer than the last chip's delayed exit, so each chip finishes its animation before it unmounts.
-const EXIT_MS = 320
+const EXIT_MS = 340
 const CHIPS = [...PRESET_PERCENTS, 100]
 
 // Keeps the chips mounted while they play their exit after `open` turns false.

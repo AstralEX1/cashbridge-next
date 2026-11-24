@@ -19,10 +19,8 @@ export const viewport: Viewport = {
   width: 'device-width',
   initialScale: 1,
   viewportFit: 'cover',
-  themeColor: [
-    { media: '(prefers-color-scheme: light)', color: '#f8fdff' },
-    { media: '(prefers-color-scheme: dark)', color: '#020707' }
-  ]
+  // Every page is dark, whatever the system theme: a light bar above the dark header looked like a gap.
+  themeColor: '#020707'
 }
 
 export const metadata: Metadata = {
@@ -87,7 +85,7 @@ export default async function RootLayout({ children }: Readonly<{ children: Reac
 
   return (
     <html lang={locale} dir={getLangDir(locale)} data-brand={AppConfig.id} suppressHydrationWarning>
-      <body className={`${crit.variable} ${notoRunic.variable} bg-body font-sans antialiased`}>
+      <body className={`${crit.variable} ${notoRunic.variable} bg-[#020707] font-sans antialiased`}>
         <WalletStoreHydration />
         <ReactQueryProvider>
           <NextIntlClientProvider locale={locale} messages={messages}>

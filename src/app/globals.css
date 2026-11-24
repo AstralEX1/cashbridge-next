@@ -604,6 +604,8 @@
 
   body {
     @apply bg-background text-foreground;
+    /* viewport-fit=cover lets pages run under the notch and a home-screen app's status bar; keep content clear. */
+    padding: env(safe-area-inset-top) env(safe-area-inset-right) 0 env(safe-area-inset-left);
     /* Off site-wide — Crit is spaced for it. */
     font-kerning: none;
   }
@@ -665,9 +667,11 @@
     transform 180ms cubic-bezier(0.22, 1, 0.36, 1),
     opacity 180ms ease;
 }
-.connect-wallet-row:hover:not(:disabled) {
-  background: var(--btn-modal-hover);
-  transform: translateX(2px);
+@media (hover: hover) and (pointer: fine) {
+  .connect-wallet-row:hover:not(:disabled) {
+    background: var(--btn-modal-hover);
+    transform: translateX(2px);
+  }
 }
 .connect-wallet-row:active:not(:disabled) {
   transform: scale(0.99);
@@ -698,8 +702,10 @@ body > div[style*='z-index:40'] {
   margin-left: -10px;
   box-shadow: 0 0 0 2px var(--sub-container-modal);
 }
-.connect-wallet-row:hover:not(:disabled) .connect-wallet-icons .connect-wallet-icon + .connect-wallet-icon {
-  box-shadow: 0 0 0 2px var(--btn-modal-hover);
+@media (hover: hover) and (pointer: fine) {
+  .connect-wallet-row:hover:not(:disabled) .connect-wallet-icons .connect-wallet-icon + .connect-wallet-icon {
+    box-shadow: 0 0 0 2px var(--btn-modal-hover);
+  }
 }
 .connect-wallet-icon {
   flex-shrink: 0;

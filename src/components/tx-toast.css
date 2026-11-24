@@ -191,9 +191,11 @@
     background-color 140ms var(--tx-toast-ease-out),
     color 140ms var(--tx-toast-ease-out);
 }
-.tx-toast-action:hover {
-  background: #84e0f71a;
-  color: var(--tx-toast-accent);
+@media (hover: hover) and (pointer: fine) {
+  .tx-toast-action:hover {
+    background: #84e0f71a;
+    color: var(--tx-toast-accent);
+  }
 }
 .tx-toast-action:active {
   transform: scale(0.94);
@@ -204,6 +206,7 @@
   height: 10px;
 }
 .tx-toast-dismiss {
+  position: relative;
   display: inline-flex;
   width: 22px;
   height: 22px;
@@ -222,9 +225,17 @@
     background-color 140ms var(--tx-toast-ease-out),
     color 140ms var(--tx-toast-ease-out);
 }
-.tx-toast-dismiss:hover {
-  background: #ffffff0f;
-  color: #fff;
+/* A 44 px touch target around the 22 px cross. */
+.tx-toast-dismiss::after {
+  content: '';
+  position: absolute;
+  inset: -11px;
+}
+@media (hover: hover) and (pointer: fine) {
+  .tx-toast-dismiss:hover {
+    background: #ffffff0f;
+    color: #fff;
+  }
 }
 .tx-toast-dismiss svg {
   width: 12px;
@@ -286,6 +297,11 @@
     transform: none;
   }
 }
+@keyframes tx-toast-fade {
+  from {
+    opacity: 0;
+  }
+}
 @keyframes tx-toast-exit {
   from {
     opacity: 1;
@@ -296,19 +312,20 @@
     transform: translateY(-6px) scale(0.98);
   }
 }
+/* On the separate translate property, so it adds to the entrance's transform instead of replacing it. */
 @keyframes tx-toast-headshake {
   0%,
   100% {
-    transform: translateX(0);
+    translate: 0;
   }
   25% {
-    transform: translateX(-2px);
+    translate: -2px;
   }
   55% {
-    transform: translateX(2px);
+    translate: 2px;
   }
   80% {
-    transform: translateX(-1px);
+    translate: -1px;
   }
 }
 @keyframes tx-toast-spin {
@@ -327,7 +344,7 @@
 @keyframes tx-toast-badge-pop {
   0% {
     opacity: 0;
-    transform: scale(0);
+    transform: scale(0.9);
   }
   60% {
     opacity: 1;
@@ -354,18 +371,18 @@
   .tx-sonner-toast .tx-toast > * {
     transition: none !important;
   }
+  /* A short fade instead of nothing; the spinner keeps turning, it is the only sign the transaction is still going. */
   .tx-toast,
-  .tx-toast.is-error,
-  .tx-toast.is-leaving,
+  .tx-toast.is-error {
+    animation: tx-toast-fade 160ms var(--tx-toast-ease-out) both;
+  }
+  .tx-toast.is-leaving {
+    animation: tx-toast-fade 160ms var(--tx-toast-ease-out) reverse forwards;
+  }
   .tx-toast-badge,
-  .tx-toast-spinner,
-  .tx-toast-icon.is-loading svg,
   .tx-toast-check,
   .tx-toast-burst {
     animation: none;
-  }
-  .tx-toast.is-leaving {
-    opacity: 0;
   }
   .tx-toast-burst {
     display: none;
