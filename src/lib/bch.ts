@@ -532,8 +532,8 @@ export const checkUnspent = (lockingBytecode: string, outpoints: { txid: string;
 
 // Whether each outpoint is still unspent with the value and token it is claimed to hold, whatever
 // script it pays (Fulcrum's blockchain.utxo.get_info answers null for a spent or unknown output).
-export const checkOutpointsLive = (outpoints: { txid: string; vout: number; value: bigint; token?: { category: string; amount: bigint } }[]) =>
-  withElectrum(client =>
+export const checkOutpointsLive = async (outpoints: { txid: string; vout: number; value: bigint; token?: { category: string; amount: bigint } }[]) =>
+  !outpoints.length ? [] : withElectrum(client =>
     Promise.all(
       outpoints.map(async p => {
         const info = await client.request<{ value?: number; token_data?: { category?: string; amount?: string | number } } | null>('blockchain.utxo.get_info', [
