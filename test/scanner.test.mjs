@@ -140,7 +140,7 @@ test("a wallet's THORChain swaps into or out of BCH become rows; other swaps and
   assert.equal(rest.length, 0)
   assert.deepEqual([row.from.amount, row.from.ticker, row.to.amount, row.to.ticker], ['3', 'USDC', '0.01306603', 'BCH'])
   assert.deepEqual(row.legs.map(leg => leg.label), ['Base deposit', 'THORChain swap', 'Payout'])
-  assert.match(row.legs[2].url, new RegExp(`bitcoin-cash/transaction/${'cd'.repeat(32)}$`, 'i'))
+  assert.match(row.legs[2].url, new RegExp(`explorer\\.selene\\.cash/tx/${'cd'.repeat(32)}$`))
   assert.deepEqual([row.status, row.router, row.time], ['completed', false, Date.UTC(2026, 10, 18)])
 
   const [refund] = rowsFromThorchain([
@@ -179,4 +179,13 @@ test("a wallet's rows keep one row per transfer: the Router's order, then a list
   assert.deepEqual(walletRows({ router: [{ ...order, createdAt: before }], feed: [], local: [], thorchain: old }), [])
   assert.equal(scanRows([{ ...order, createdAt: before }], []).length, 0)
   assert.equal(scanRows([order], []).length, 1)
+})
+
+test('Bitcoin Cash links open an explorer that names CashTokens; other chains keep their own', async () => {
+  const { explorerTxUrl, explorerAddressUrl } = await import('../src/lib/explorer.ts')
+  assert.equal(explorerTxUrl({ chain: 'BCH', txHash: 'AB'.repeat(32) }), `https://explorer.selene.cash/tx/${'ab'.repeat(32)}`)
+  assert.equal(explorerAddressUrl({ chain: 'BCH', address: 'bitcoincash:qabc' }), 'https://explorer.selene.cash/address/bitcoincash:qabc')
+  assert.match(explorerTxUrl({ chain: 'ETH', txHash: 'ab'.repeat(32) }), /^https:\/\/etherscan\.io\/tx\/0x/)
+  for (const run of RUNS) for (const [, url] of run.links) assert.doesNotMatch(url, /blockchair\.com\/bitcoin-cash/)
+  assert.equal(explorerIcon(`https://explorer.selene.cash/tx/${'ab'.repeat(32)}`), explorerIcon('https://www.blockchair.com/bitcoin-cash/transaction/x'))
 })

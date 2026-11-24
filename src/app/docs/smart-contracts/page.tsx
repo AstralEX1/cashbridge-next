@@ -14,7 +14,7 @@ export const metadata: Metadata = {
 }
 
 const source = (file: string) => `${AppConfig.repoUrl}/blob/main/contracts/${file}`
-const tx = (hash: string) => `https://blockchair.com/bitcoin-cash/transaction/${hash}`
+const tx = (hash: string) => `https://explorer.selene.cash/tx/${hash}`
 
 // Router runs from Proof on mainnet that went through these contracts.
 const RUNS: { route: string; contract: string; links: [string, string][] }[] = [

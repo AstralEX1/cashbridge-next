@@ -3,7 +3,8 @@
 import { type ReactNode, useEffect, useRef, useState, useSyncExternalStore } from 'react'
 import { useTranslations } from 'next-intl'
 import { toast as sonner } from 'sonner'
-import { Chain, getExplorerTxUrl } from '@tcswap/core'
+import { Chain } from '@tcswap/core'
+import { explorerTxUrl } from '@/lib/explorer'
 import { shortBridgeAddress } from '@/components/swap/bridge-wallet-badge'
 import { TxToastCard } from '@/components/tx-toast'
 import { toast } from '@/lib/toast'
@@ -63,7 +64,7 @@ const FlowToastStack = ({ toasts, onDismiss, persist }: { toasts: FlowToast[]; o
     shown.current = next
     gone.forEach(id => sonner.dismiss(id))
     for (const item of items) {
-      const explorer = item.hash && item.chain ? getExplorerTxUrl({ chain: item.chain, txHash: item.hash }) : undefined
+      const explorer = item.hash && item.chain ? explorerTxUrl({ chain: item.chain, txHash: item.hash }) : undefined
       const options = {
         id: item.id,
         icon: item.icon,
@@ -118,7 +119,7 @@ const FlowToastList = ({ toasts, onDismiss }: { toasts: FlowToast[]; onDismiss: 
   return (
     <ol className="bridge-flow-toasts" aria-label={t('transactions')}>
       {toasts.map(item => {
-        const explorer = item.hash && item.chain ? getExplorerTxUrl({ chain: item.chain, txHash: item.hash }) : undefined
+        const explorer = item.hash && item.chain ? explorerTxUrl({ chain: item.chain, txHash: item.hash }) : undefined
         return (
           <li key={item.id}>
             <TxToastCard

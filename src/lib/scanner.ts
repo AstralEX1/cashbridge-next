@@ -1,4 +1,5 @@
-import { getExplorerTxUrl, type Chain } from '@tcswap/core'
+import type { Chain } from '@tcswap/core'
+import { explorerTxUrl } from '@/lib/explorer'
 import { getChainConfig } from '@tcswap/helpers'
 import type { FeedOrder, OrderState } from '@/lib/auto-bridge-contract'
 import { formatBaseUnits } from '@/lib/bridge'
@@ -85,7 +86,7 @@ const mark = (ticker: string, chain: string, icon?: string): Pick<ScanSide, 'ico
 const EXPLORERS: [RegExp, string][] = [
   [/thorchain\.net|runescan/, 'thor'],
   [/near-intents/, 'near'],
-  [/bitcoin-cash|bch\.|cashscript|salemkode/, 'bch'],
+  [/bitcoin-cash|bch\.|cashscript|salemkode|explorer\.selene/, 'bch'],
   [/bscscan/, 'bsc'],
   [/snowscan|snowtrace|avascan/, 'avax'],
   [/basescan/, 'base'],
@@ -147,9 +148,9 @@ export const sideOf = (ticker: string, chain: string, amount?: string, icon?: st
 }
 
 export const thorchainTxUrl = (hash: string) => `https://thorchain.net/tx/${hash.replace(/^0x/i, '').toLowerCase()}`
-export const bchTxUrl = (txid: string) => getExplorerTxUrl({ chain: 'BCH' as Chain, txHash: txid })
+export const bchTxUrl = (txid: string) => explorerTxUrl({ chain: 'BCH' as Chain, txHash: txid })
 export const sourceTxUrl = (chain: string, hash: string) =>
-  getExplorerTxUrl({ chain: chain as Chain, txHash: isEvmChain(chain) && /^[0-9a-f]{64}$/i.test(hash) ? `0x${hash}` : hash }) || thorchainTxUrl(hash)
+  explorerTxUrl({ chain: chain as Chain, txHash: isEvmChain(chain) && /^[0-9a-f]{64}$/i.test(hash) ? `0x${hash}` : hash }) || thorchainTxUrl(hash)
 
 const STATUS: Partial<Record<OrderState, ScanStatus>> = {
   completed: 'completed',

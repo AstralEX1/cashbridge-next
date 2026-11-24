@@ -1,7 +1,8 @@
 'use client'
 
 import { useEffect, useLayoutEffect, useRef, useState } from 'react'
-import { Chain, getExplorerAddressUrl } from '@tcswap/core'
+import { Chain } from '@tcswap/core'
+import { explorerAddressUrl } from '@/lib/explorer'
 import { Check, Copy, ExternalLink, LoaderCircle, Wallet, X } from 'lucide-react'
 import { useTranslations } from 'next-intl'
 import { toast } from '@/lib/toast'
@@ -159,7 +160,7 @@ export const WalletAddressBadge = ({
             </button>
           </Tooltip>
           <Tooltip content={t('explorer')}>
-            <a aria-label={t('explorer')} href={getExplorerAddressUrl({ chain, address })} target="_blank" rel="noopener noreferrer">
+            <a aria-label={t('explorer')} href={explorerAddressUrl({ chain, address })} target="_blank" rel="noopener noreferrer">
               <ExternalLink size={16} />
             </a>
           </Tooltip>
