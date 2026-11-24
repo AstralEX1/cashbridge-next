@@ -11,19 +11,6 @@ import { cn } from '@/lib/utils'
 import { INITIAL_CUSTOM_INTERVAL, INITIAL_CUSTOM_QUANTITY, INITIAL_SLIPPAGE } from '@/store/swap-store'
 
 const slippageValues = [0.1, 0.2, 0.3, 0.4, 0.5, 0.75, 1, 1.25, 1.5, 1.75, 2, 2.5, 3, 3.5, 4, 4.5, 5, 6, 7, 8, 9, 10]
-const numberOfTradesValues = [1, 5, 10, 15, 20, 25, 30, 50, 100]
-
-// index 0 = 0 (disabled), index 1..N = numberOfTradesValues[0..N-1]
-function quantityToSliderIndex(quantity: number): number {
-  if (quantity === 0) return 0
-  const index = numberOfTradesValues.indexOf(quantity)
-  return index !== -1 ? index + 1 : 1
-}
-
-function sliderIndexToQuantity(index: number): number {
-  if (index === 0) return 0
-  return numberOfTradesValues[index - 1]
-}
 
 export const SwapSettings = () => {
   const t = useTranslations('swap')

@@ -20,8 +20,8 @@ import { useIsMobile } from '@/hooks/use-mobile'
 import { useAddressCode } from '@/hooks/use-address-code'
 import { useResolvedName } from '@/hooks/use-resolved-name'
 import { AddressCheck, useValidAddress } from '@/hooks/use-valid-address'
-import { useAssetFrom, useAssetTo, useCustomInterval, useCustomQuantity, useSlippage, useSwap } from '@/hooks/use-swap'
-import { useAccounts, useConnectedAccount, useSelectedAccount } from '@/hooks/use-wallets'
+import { useAssetFrom, useAssetTo, useSlippage, useSwap } from '@/hooks/use-swap'
+import { useConnectedAccount, useSelectedAccount } from '@/hooks/use-wallets'
 import { useSwapStore } from '@/store/swap-store'
 import { getNetworkQuotes, getQuotes } from '@/lib/api'
 import { getNetworkRoutes } from '@/lib/network-swap'
@@ -63,10 +63,7 @@ const RecipientForm = ({
   const t = useTranslations('swap')
   const isMobile = useIsMobile()
   const slippage = useSlippage()
-  const customInterval = useCustomInterval()
-  const customQuantity = useCustomQuantity()
   const openNetworks = useSwapStore(state => state.openNetworks)
-  const accounts = useAccounts()
   const legacyAccount = useSelectedAccount()
   const sourceAccount = useConnectedAccount(assetFrom.chain, openNetworks)
   const selectedAccount = openNetworks ? sourceAccount : legacyAccount
@@ -99,7 +96,6 @@ const RecipientForm = ({
   // needs one only when every route on offer asks for it.
   const depositOrder = (!selectedAccount && (provider === 'NEAR' || isHoudini)) || (isHoudini && isDepositOnlyPrivateSell(assetFrom.chain))
   const refundRequired = depositOrder && (!isHoudini || refundAsked)
-  const options = accounts.filter(a => a.network === assetTo.chain)
   const isMayachain = isMayaProvider(provider)
   const isTaprootDestination = isMayachain && assetTo.chain === Chain.Bitcoin && isTaprootAddress(destinationAddress)
   // Optional: a self-custody wallet needs none, an exchange deposit address needs its memo / tag.
@@ -135,9 +131,6 @@ const RecipientForm = ({
 
   const fetchQuote = () => {
     setQuoting(true)
-
-    const isThorchain = provider === 'THORCHAIN' || provider === 'THORCHAIN_STREAMING'
-    const supportsStreaming = isThorchain || isMayachain
 
     ;(openNetworks
       ? (request: Parameters<typeof getNetworkQuotes>[0]) =>
