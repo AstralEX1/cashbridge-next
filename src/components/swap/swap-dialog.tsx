@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useState } from 'react'
 import { useTranslations } from 'next-intl'
 import { Chain, FeeOption, getChainConfig, USwapNumber } from '@tcswap/core'
 import { ProviderName } from '@tcswap/helpers'
@@ -24,8 +24,6 @@ import { quoteLapsed, toBaseUnits } from '@/lib/bridge'
 import { firstLegSeconds } from '@/lib/bridge-summary'
 import { useBchWallet } from '@/components/bch-wallet'
 import { BridgeBlocked, FirstLegRejected, startBridgeFirstLeg } from '@/components/swap/pusd-swap'
-import { useIsLimitSwap, useLimitSwapBuyAmount } from '@/store/limit-swap-store'
-import { useReplacementOrderStore, useSetReplacementOrder } from '@/store/replacement-order-store'
 import { useSwapStore } from '@/store/swap-store'
 import { getActiveBridge } from '@/store/transaction-store'
 import { chainLabel } from '@/components/connect-wallet/config'
@@ -56,24 +54,14 @@ export const SwapDialog = ({ provider, quote: prepared, binding: destination, wa
   const wallet = useBchWallet()
   const binding = destination ?? wallet.binding
   const bchWalletName = destination ? walletName : wallet.walletName
-  const setReplacementOrder = useSetReplacementOrder()
-  const isLimitSwap = useIsLimitSwap()
-  const limitSwapBuyAmount = useLimitSwapBuyAmount()
   const { rateFrom, rateTo } = useSwapRates()
-
-  // A replacement order gets exactly one confirm screen: placed or dismissed, it is not offered again.
-  useEffect(() => {
-    return () => {
-      if (useReplacementOrderStore.getState().replacement?.consumed) setReplacementOrder(undefined)
-    }
-  }, [setReplacementOrder])
 
   const [quote, setQuote] = useState<QuoteResponseRoute | undefined>(prepared)
   const [highPriceImpactAccepted, setHighPriceImpactAccepted] = useState(false)
   const [ltcWarningAccepted, setLtcWarningAccepted] = useState(false)
 
   const priceImpact = resolvePriceImpact(quote, rateFrom, rateTo)
-  const requiresHighPriceImpactAcceptance = !isLimitSwap && !!priceImpact && priceImpact.gt(2)
+  const requiresHighPriceImpactAcceptance = !!priceImpact && priceImpact.gt(2)
   const requiresLtcWarning = assetFrom?.ticker === 'LTC'
   const confirmBlocked = (requiresLtcWarning && !ltcWarningAccepted) || (requiresHighPriceImpactAcceptance && !highPriceImpactAccepted)
 

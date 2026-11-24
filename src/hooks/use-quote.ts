@@ -8,7 +8,6 @@ import { useAssetFrom, useAssetTo, useCustomInterval, useCustomQuantity, useSlip
 import { getNetworkQuotes, getQuotes, QuoteTimeoutError } from '@/lib/api'
 import { BelowMinimumError, isTradingHaltedError, resolveQuoteError } from '@/lib/errors'
 import { isHoudiniProvider } from '@/lib/swap-helpers'
-import { useIsPrivateSend, useIsPrivateSwap } from '@/store/private-swap-store'
 import { useTokenSale } from '@/hooks/use-token-sale'
 import { useSwapStore } from '@/store/swap-store'
 import { useAutomaticBridge } from '@/hooks/use-automatic-bridge'
@@ -59,10 +58,8 @@ export const useQuote = (): UseQuote => {
   const assetTo = useAssetTo()
   const customInterval = useCustomInterval()
   const customQuantity = useCustomQuantity()
-  const isPrivateSwap = useIsPrivateSwap()
-  const isPrivateSend = useIsPrivateSend()
-  // Right after a tab/mode switch the pair lags a render behind (Swap fixes it in an effect); don't quote it.
-  const pairMatchesMode = isPrivateSend === (!!assetFrom && assetFrom.identifier === assetTo?.identifier)
+  // Right after a mode switch the pair can lag a render behind (Swap fixes it in an effect); don't quote a same-asset pair.
+  const sameAsset = !!assetFrom && assetFrom.identifier === assetTo?.identifier
 
   // The reverse bridge sells BCH into `assetFrom` (the other chain's asset). From a token, the BCH
   // quoted is what the Cauldron sale of the typed amount is expected to leave for THORChain.
@@ -74,14 +71,8 @@ export const useQuote = (): UseQuote => {
   const sale = useTokenSale(!openNetworks && reverse ? bchToken : null, valueFrom.toSignificant())
   const sellAsset = openNetworks ? assetFrom?.identifier : reverse ? BridgeConfig.buyAsset : assetFrom?.identifier
   // Bridge forward settles native BCH (CashToken afterwards on Cauldron). Open networks quotes the selected
-  // pair. Private product keeps the form destination. NEAR Intents only settles BCH.BCH on one side.
-  const buyAsset = openNetworks
-    ? assetTo?.identifier
-    : reverse
-      ? assetFrom?.identifier
-      : isPrivateSwap
-        ? assetTo?.identifier
-        : BridgeConfig.buyAsset
+  // pair. NEAR Intents only settles BCH.BCH on one side.
+  const buyAsset = openNetworks ? assetTo?.identifier : reverse ? assetFrom?.identifier : BridgeConfig.buyAsset
   const sellAmount =
     !openNetworks && reverse && bchToken ? sale.bridgeAmount : valueFrom.eqValue(0) ? undefined : valueFrom.toSignificant()
   const { automatic } = useAutomaticBridge()
@@ -91,8 +82,8 @@ export const useQuote = (): UseQuote => {
   // NEAR Intents and ShapeShift carry manual transfers both ways and free pairs, and the Cashbridge Router's transfers
   // when it takes them (forward: a NEAR Intents deposit address it follows; back: a sale that pays one).
   const routerTakes = (forward: boolean) => (reverse ? BridgeConfig.routerSaleRoutes : forward)
-  const nearAllowed = BridgeConfig.nearIntents && !isPrivateSwap && (openNetworks || !automatic || routerTakes(BridgeConfig.routerNear))
-  const shapeshiftAllowed = BridgeConfig.shapeshift && !isPrivateSwap && (openNetworks || !automatic || routerTakes(BridgeConfig.routerShapeShift))
+  const nearAllowed = BridgeConfig.nearIntents && (openNetworks || !automatic || routerTakes(BridgeConfig.routerNear))
+  const shapeshiftAllowed = BridgeConfig.shapeshift && (openNetworks || !automatic || routerTakes(BridgeConfig.routerShapeShift))
   // ShapeShift wants both sides' decimals; on the bridge form one side is native BCH.
   const shapeshiftDecimals = openNetworks
     ? assetFrom && assetTo && { sellDecimals: assetFrom.decimals, buyDecimals: assetTo.decimals }
@@ -118,7 +109,6 @@ export const useQuote = (): UseQuote => {
     slippage,
     customInterval,
     customQuantity,
-    isPrivateSwap,
     nearAllowed,
     shapeshiftAllowed,
     shapeshiftAmount,
@@ -184,7 +174,7 @@ export const useQuote = (): UseQuote => {
           ).then(quotes => {
             if (quotes.length === 0) throw new Error(reverse ? 'No THORChain route from BCH for this amount' : 'No THORChain route to BCH for this amount')
 
-            if (AppConfig.id === 'thorchain' && !isPrivateSwap) {
+            if (AppConfig.id === 'thorchain') {
               const thorchainQuote =
                 quotes.find(q => q.providers[0] === ProviderName.THORCHAIN_STREAMING) || quotes.find(q => q.providers[0] === ProviderName.THORCHAIN)
 
@@ -213,9 +203,9 @@ export const useQuote = (): UseQuote => {
     },
     placeholderData: previous => {
       const sample = previous?.thorchain ?? previous?.near ?? previous?.shapeshift
-      return sample && isQuoteFor(sample, sellAsset, buyAsset) && isHoudiniProvider(sample.providers[0]) === isPrivateSwap ? previous : undefined
+      return sample && isQuoteFor(sample, sellAsset, buyAsset) && !isHoudiniProvider(sample.providers[0]) ? previous : undefined
     },
-    enabled: !!(sellAmount && sellAsset && buyAsset && (reverse || pairMatchesMode)) && !(onBch && !openNetworks),
+    enabled: !!(sellAmount && sellAsset && buyAsset && (reverse || !sameAsset)) && !(onBch && !openNetworks),
     // A THORChain timeout is transient: asked again a few seconds later, quietly.
     retry: (count, error) => error instanceof QuoteTimeoutError && count < 2,
     retryDelay: 3_000,

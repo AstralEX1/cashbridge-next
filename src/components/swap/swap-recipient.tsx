@@ -26,7 +26,6 @@ import { useSwapStore } from '@/store/swap-store'
 import { getNetworkQuotes, getQuotes } from '@/lib/api'
 import { getNetworkRoutes } from '@/lib/network-swap'
 import { resolveQuoteError } from '@/lib/errors'
-import { prepareQuoteForLimitSwap } from '@/lib/memo-helpers'
 import {
   isDepositOnlyPrivateSell,
   isHoudiniProvider,
@@ -36,9 +35,6 @@ import {
   supportsHoudiniMemo
 } from '@/lib/swap-helpers'
 import { cn, truncate } from '@/lib/utils'
-import { useIsLimitSwapPaused, useLimitSwapMaxAge } from '@/hooks/use-mimir'
-import { useIsLimitSwap, useLimitSwapBuyAmount, useLimitSwapExpiry } from '@/store/limit-swap-store'
-import { useReplacementOrder } from '@/store/replacement-order-store'
 import { WalletAccount } from '@/store/wallets-store'
 import { useBchWallet } from '@/components/bch-wallet'
 
@@ -74,19 +70,12 @@ const RecipientForm = ({
   const legacyAccount = useSelectedAccount()
   const sourceAccount = useConnectedAccount(assetFrom.chain, openNetworks)
   const selectedAccount = openNetworks ? sourceAccount : legacyAccount
-  const isLimitSwap = useIsLimitSwap()
-  const limitSwapBuyAmount = useLimitSwapBuyAmount()
-  const limitSwapExpiry = useLimitSwapExpiry()
-  const limitSwapMaxAge = useLimitSwapMaxAge()
-  const isLimitSwapPaused = useIsLimitSwapPaused()
 
   const { valueFrom } = useSwap()
   const [quoting, setQuoting] = useState(false)
   const autoFetched = useRef(false)
   const [quoteError, setQuoteError] = useState<Error | undefined>()
 
-  // A replacement for a cancelled limit order keeps the destination the original order paid out to.
-  const replacementOrder = useReplacementOrder()
   // Bridge mode always pays the connected BCH wallet. Open networks pays the buy-chain wallet (editable).
   const { binding } = useBchWallet()
   const buyAccount = useConnectedAccount(assetTo.chain, openNetworks)
@@ -95,7 +84,6 @@ const RecipientForm = ({
     ? typedDestination ?? buyAccount?.address ?? ''
     : (binding?.cashAddress ?? '')
   const setDestinationAddress = openNetworks ? setTypedDestination : (_: string) => {}
-  void replacementOrder
   const [refundAddress, setRefundAddress] = useState<string>('')
   const [destinationMemo, setDestinationMemo] = useState('')
   const [refundAsked, setRefundAsked] = useState(false)
@@ -109,7 +97,7 @@ const RecipientForm = ({
   const isHoudini = isHoudiniProvider(provider)
   // Without a wallet the user names the refund address - except for Houdini, which (like its own app)
   // needs one only when every route on offer asks for it.
-  const depositOrder = (!selectedAccount && (provider === 'NEAR' || isHoudini)) || (isHoudini && isDepositOnlyPrivateSell(true, assetFrom.chain))
+  const depositOrder = (!selectedAccount && (provider === 'NEAR' || isHoudini)) || (isHoudini && isDepositOnlyPrivateSell(assetFrom.chain))
   const refundRequired = depositOrder && (!isHoudini || refundAsked)
   const options = accounts.filter(a => a.network === assetTo.chain)
   const isMayachain = isMayaProvider(provider)
@@ -163,17 +151,12 @@ const RecipientForm = ({
       destinationAddress: destinationAddress,
       refundAddress: refundRequired ? refundAddress : provider === 'MAYACHAIN' ? undefined : selectedAccount?.address,
       dry: !(depositOrder || selectedAccount),
-      slippage: isLimitSwap ? 0 : (slippage ?? 99),
+      slippage: slippage ?? 99,
       providers: [provider]
     })
       .then(quotes => {
-        let quote = quotes[0]
+        const quote = quotes[0]
         if (!quote) throw new Error(t('button.noValidQuotes'))
-
-        // For THORChain limit orders, modify the memo to use limit order format
-        if (isLimitSwap && isThorchain) {
-          quote = prepareQuoteForLimitSwap(quote, limitSwapBuyAmount, Math.min(limitSwapExpiry, limitSwapMaxAge))
-        }
 
         // Carried on the quote so the confirm screen can show it; the route itself does not echo it.
         onFetchQuote(memo ? { ...quote, destinationMemo: memo } : quote)
@@ -196,17 +179,14 @@ const RecipientForm = ({
     !destinationCode.isChecking &&
     !destinationCode.isUnverified &&
     !quoting &&
-    !(isLimitSwap && isLimitSwapPaused) &&
     (refundRequired ? refundCheck.isValid && refundAddress.length : true)
 
-  // A replacement for a cancelled limit order already knows its destination, so it skips this step:
-  // the quote is fetched on mount and the dialog opens straight on the confirm screen.
   useEffect(() => {
-    if ((!autoPrepare && !replacementOrder?.consumed) || autoFetched.current || !buttonEnabled) return
+    if (!autoPrepare || autoFetched.current || !buttonEnabled) return
     autoFetched.current = true
     fetchQuote()
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [replacementOrder?.consumed, buttonEnabled, autoPrepare])
+  }, [buttonEnabled, autoPrepare])
 
   const addressInput = (
     field: 'refund' | 'destination',

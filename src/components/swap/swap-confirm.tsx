@@ -19,8 +19,7 @@ import { useSourceGas } from '@/hooks/use-source-gas'
 import { houdiniQuoteRates, useRates, useSwapRates } from '@/hooks/use-rates'
 import { useAssetFrom, useAssetTo, useSlippage } from '@/hooks/use-swap'
 import { formatExpiration, isHoudiniProvider, isPrivateSend, resolveFees } from '@/lib/swap-helpers'
-import { cn, toCurrencyFixed, truncate } from '@/lib/utils'
-import { useIsLimitSwap, useLimitSwapBuyAmount } from '@/store/limit-swap-store'
+import { toCurrencyFixed, truncate } from '@/lib/utils'
 import { shortBridgeAddress } from '@/components/swap/bridge-wallet-badge'
 import { useTokenQuoteFor } from '@/components/swap/pusd-swap'
 import type { CauldronToken } from '@/lib/cauldron-tokens'
@@ -329,8 +328,6 @@ export const SwapConfirm = ({ quote, priceImpact }: SwapConfirmProps) => {
   const assetFrom = useAssetFrom()
   const assetTo = useAssetTo()
   const slippage = useSlippage()
-  const isLimitSwap = useIsLimitSwap()
-  const limitSwapBuyAmount = useLimitSwapBuyAmount()
 
   const identifiers = useMemo(() => quote.fees.map(f => f.asset).sort(), [quote.fees])
   const { rates } = useRates(identifiers, quote.providers[0])
@@ -365,23 +362,6 @@ export const SwapConfirm = ({ quote, priceImpact }: SwapConfirmProps) => {
   const { inbound, outbound, liquidity, platform, included } = resolveFees(quote, feeRates)
   const { openDialog } = useDialog()
 
-  const limitBuyAmount = useMemo(() => {
-    if (!limitSwapBuyAmount) return null
-    return USwapNumber.fromBigInt(BigInt(limitSwapBuyAmount), 8)
-  }, [limitSwapBuyAmount])
-
-  const limitPricePerUnit = useMemo(() => {
-    if (!limitBuyAmount || sellAmount.eq(0)) return null
-    return limitBuyAmount.div(sellAmount)
-  }, [limitBuyAmount, sellAmount])
-
-  const limitPriceDifferencePercent = useMemo(() => {
-    if (!limitBuyAmount || expectedBuyAmount.eq(0)) return null
-    return limitBuyAmount.sub(expectedBuyAmount).div(expectedBuyAmount).mul(100)
-  }, [limitBuyAmount, expectedBuyAmount])
-
-  const displayBuyAmount = isLimitSwap && limitBuyAmount ? limitBuyAmount : expectedBuyAmount
-
   if (!assetFrom || !assetTo) return null
 
   // A private swap is priced floating and settled off-chain by Houdini: the payout is re-priced
@@ -393,7 +373,7 @@ export const SwapConfirm = ({ quote, priceImpact }: SwapConfirmProps) => {
   return (
     <>
       <CredenzaHeader>
-        <CredenzaTitle>{isLimitSwap ? t('confirm.titleLimit') : isSend ? t('confirm.titlePrivateSend') : t('confirm.titleSwap')}</CredenzaTitle>
+        <CredenzaTitle>{isSend ? t('confirm.titlePrivateSend') : t('confirm.titleSwap')}</CredenzaTitle>
       </CredenzaHeader>
 
       <ScrollArea className="relative flex min-h-0 flex-1 px-4 md:px-8" classNameViewport="flex-1 h-auto">
@@ -419,10 +399,10 @@ export const SwapConfirm = ({ quote, priceImpact }: SwapConfirmProps) => {
             <div className="flex items-center gap-3">
               <div className="flex flex-col items-end">
                 <span className="text-txt-high-contrast text-base font-semibold">
-                  <DecimalText amount={displayBuyAmount.toSignificant()} /> {assetTo.ticker}
+                  <DecimalText amount={expectedBuyAmount.toSignificant()} /> {assetTo.ticker}
                 </span>
                 <span className="text-txt-label-small text-sm">
-                  {rateTo ? toCurrencyFixed(displayBuyAmount.mul(rateTo).toCurrency('$', { trimTrailingZeros: false })) : t('confirm.notAvailable')}
+                  {rateTo ? toCurrencyFixed(expectedBuyAmount.mul(rateTo).toCurrency('$', { trimTrailingZeros: false })) : t('confirm.notAvailable')}
                 </span>
               </div>
               <AssetIcon asset={assetTo} />
@@ -485,49 +465,7 @@ export const SwapConfirm = ({ quote, priceImpact }: SwapConfirmProps) => {
           )}
 
           <div className="space-y-4 border-t py-3">
-            {isLimitSwap && limitPricePerUnit ? (
-              <>
-                <div className="text-txt-label-small flex justify-between text-sm">
-                  <div className="flex items-center gap-1">
-                    {t('confirm.limitPrice')}
-                    <InfoTooltip>{t('confirm.limitPriceTooltip')}</InfoTooltip>
-                  </div>
-                  <div className="flex flex-col items-end">
-                    <span className="text-txt-high-contrast font-semibold">
-                      <DecimalText amount={limitPricePerUnit.toSignificant()} /> {assetTo.ticker}/{assetFrom.ticker}
-                    </span>
-                    {limitPriceDifferencePercent && (
-                      <span
-                        className={cn('font-medium', {
-                          'text-remus': limitPriceDifferencePercent.gt(0),
-                          'text-lucian': limitPriceDifferencePercent.lt(0)
-                        })}
-                      >
-                        {limitPriceDifferencePercent.gte(0) ? '+' : ''}
-                        {limitPriceDifferencePercent.toFixed(1)}%
-                      </span>
-                    )}
-                  </div>
-                </div>
-
-                <div className="text-txt-label-small flex justify-between text-sm">
-                  <div className="flex items-center gap-1">
-                    {t('confirm.targetAmount')}
-                    <InfoTooltip>{t('confirm.targetAmountTooltip')}</InfoTooltip>
-                  </div>
-                  <div className="flex flex-col items-end">
-                    <span className="text-txt-high-contrast font-semibold">
-                      <DecimalText amount={displayBuyAmount.toSignificant()} symbol={assetTo.ticker} />
-                    </span>
-                    {rateTo && (
-                      <span className="font-medium">
-                        {toCurrencyFixed(displayBuyAmount.mul(rateTo).toCurrency('$', { trimTrailingZeros: false }))}
-                      </span>
-                    )}
-                  </div>
-                </div>
-              </>
-            ) : isPrivate ? (
+            {isPrivate ? (
               <>
                 <div className="text-txt-label-small flex justify-between text-sm">
                   <div className="flex items-center gap-1">
@@ -564,7 +502,7 @@ export const SwapConfirm = ({ quote, priceImpact }: SwapConfirmProps) => {
               </div>
             )}
 
-            {!isLimitSwap && priceImpact && (
+            {priceImpact && (
               <div className="text-txt-label-small flex justify-between text-sm">
                 <div className="flex items-center gap-1">
                   {t('confirm.priceImpact')}
@@ -574,7 +512,7 @@ export const SwapConfirm = ({ quote, priceImpact }: SwapConfirmProps) => {
               </div>
             )}
 
-            {!isLimitSwap && !isPrivate && slippageTolerance && slippageTolerance.gt(0) && (
+            {!isPrivate && slippageTolerance && slippageTolerance.gt(0) && (
               <div className="text-txt-label-small flex justify-between text-sm">
                 <div className="flex items-center gap-1">
                   {t('confirm.slippageTolerance')}

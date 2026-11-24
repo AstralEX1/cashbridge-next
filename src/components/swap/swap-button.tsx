@@ -14,16 +14,14 @@ import { InstantSwapDialog } from '@/components/swap/instant-swap-dialog'
 import { NetworkSwapDialog } from '@/components/swap/network-swap-dialog'
 import { SwapDialog } from '@/components/swap/swap-dialog'
 import { useBalance } from '@/hooks/use-balance'
-import { useIsLimitSwapPaused, useIsMemolessHalted, useMimir } from '@/hooks/use-mimir'
+import { useIsMemolessHalted } from '@/hooks/use-mimir'
 import { useQuote } from '@/hooks/use-quote'
 import { useSimulation } from '@/hooks/use-simulation'
 import { useAssetFrom, useAssetTo, useSlippage, useSwap } from '@/hooks/use-swap'
 import { useConnectedAccount, useExternalWalletMode, useSetExternalWalletMode } from '@/hooks/use-wallets'
 import { readableError, resolveQuoteError } from '@/lib/errors'
-import { isDepositOnlyPrivateSell, isMayaProvider, isPrivateSend, isTaprootAddress, waitForAllowance } from '@/lib/swap-helpers'
+import { isMayaProvider, isTaprootAddress, waitForAllowance } from '@/lib/swap-helpers'
 import { getUSwap } from '@/lib/wallets'
-import { useIsLimitSwap, useLimitSwapBuyAmount } from '@/store/limit-swap-store'
-import { useIsPrivateSwap, usePrivateSwapAcknowledged } from '@/store/private-swap-store'
 import { useSwapStore } from '@/store/swap-store'
 import { useAutomaticBridge, useBchDestination } from '@/hooks/use-automatic-bridge'
 import { AutoBridgeDialog, prepareAutomatic } from '@/components/swap/auto-bridge-confirm'
@@ -64,10 +62,6 @@ export const SwapButton = ({ instantSwapSupported, instantSwapAvailable, onShowB
   const openNetworks = useSwapStore(state => state.openNetworks)
   const uSwap = getUSwap()
   const selectedAccount = useConnectedAccount(assetFrom?.chain, openNetworks)
-  const isLimitSwap = useIsLimitSwap()
-  const limitSwapBuyAmount = useLimitSwapBuyAmount()
-  const isPrivateSwap = useIsPrivateSwap()
-  const privateSwapAcknowledged = usePrivateSwapAcknowledged()
   const externalWalletMode = useExternalWalletMode()
   const isMemolessHalted = useIsMemolessHalted()
   const setExternalWalletMode = useSetExternalWalletMode()
@@ -75,15 +69,8 @@ export const SwapButton = ({ instantSwapSupported, instantSwapAvailable, onShowB
   const { quote, routes, isLoading: isQuoting, refetch: refetchQuote, minimum } = useQuote()
   const { isLoading: isSimulating, approveData } = useSimulation()
   const { balance, isLoading: isBalanceLoading, error: balanceError, refetch: refetchBalance } = useBalance()
-  const { mimir } = useMimir()
-  const isLimitSwapPaused = useIsLimitSwapPaused()
   const isMayaChain = isMayaProvider(quote?.providers[0])
-  const isLimitSwapDisabled = mimir['ENABLEADVSWAPQUEUE'] === 2 || isLimitSwapPaused || isMayaChain
-  const actionLabel = isLimitSwap
-    ? t('button.enterLimitOrder')
-    : isPrivateSend(isPrivateSwap, assetFrom, assetTo)
-      ? t('button.send')
-      : t('button.send')
+  const actionLabel = t('button.send')
 
   const [isApproving, setIsApproving] = useState(false)
   const [preparing, setPreparing] = useState(false)
@@ -257,10 +244,6 @@ export const SwapButton = ({ instantSwapSupported, instantSwapAvailable, onShowB
       return { text: t('button.connectWallet', { chain: chainLabel(assetFrom.chain) }), spinner: false, accent: true, onClick: connectSource }
     }
     if (activeBridge) return { text: t('button.viewBridge'), spinner: false, accent: true, onClick: onShowBridge }
-    if (isLimitSwap && isLimitSwapDisabled) {
-      return { text: isMayaChain ? t('button.limitNotSupported') : t('button.temporarilyUnavailable'), spinner: false, accent: false }
-    }
-
     if (!assetFrom || !assetTo) return { text: '', spinner: true, accent: false }
 
     if (valueFrom.eqValue(0)) return { text: t('button.enterAmount'), spinner: false, accent: false }
@@ -271,19 +254,11 @@ export const SwapButton = ({ instantSwapSupported, instantSwapAvailable, onShowB
     if (!quote && minimum) return { text: t('button.minimum', { amount: minimum, ticker: assetFrom.ticker }), spinner: false, accent: false }
     if (!quote) return { text: t('button.noValidQuotes'), spinner: false, accent: false }
 
-    if (isLimitSwap && limitSwapBuyAmount === '0') {
-      return { text: t('button.enterLimitPrice'), spinner: false, accent: false }
-    }
-
     // Native BCH needs only the THORChain route; a token also needs an indicative Cauldron route.
     if (!openNetworks && bchToken) {
       if (tokenEstimate.isLoading) return { text: t('button.quoting'), spinner: true, accent: false }
       if (tokenEstimate.error || tokenEstimate.output === undefined || tokenEstimate.output <= 0n)
         return { text: t('button.noPusdRoute', { ticker: bchToken.ticker }), spinner: false, accent: false }
-    }
-
-    if (isDepositOnlyPrivateSell(isPrivateSwap, assetFrom.chain)) {
-      return { text: actionLabel, spinner: false, accent: true, onClick: () => onInstantSwap(quote) }
     }
 
     if (!selectedAccount) {
@@ -355,12 +330,6 @@ export const SwapButton = ({ instantSwapSupported, instantSwapAvailable, onShowB
   // The notice belongs to the transfer that failed: a different amount, asset or mode clears it.
   const transferKey = `${assetFrom?.identifier}|${valueFrom.toSignificant()}|${automatic}`
   useEffect(() => setRouterDown(false), [transferKey])
-
-  // A private swap leaves the native protocols, so it cannot start until the disclaimer is accepted.
-  if (isPrivateSwap && !privateSwapAcknowledged && state.accent) {
-    state.accent = false
-    state.onClick = undefined
-  }
 
   return (
     <>

@@ -15,7 +15,6 @@ import { useSwapRates } from '@/hooks/use-rates'
 import { useAssetFrom, useAssetTo, useSwap } from '@/hooks/use-swap'
 import { isHoudiniProvider, resolvePriceImpact } from '@/lib/swap-helpers'
 import { generateId } from '@/lib/utils'
-import { useIsLimitSwap, useLimitSwapBuyAmount } from '@/store/limit-swap-store'
 import { useSetTransaction } from '@/store/transaction-store'
 import { useSwapStore } from '@/store/swap-store'
 import { toBaseUnits } from '@/lib/bridge'
@@ -54,8 +53,6 @@ export const InstantSwapDialog = ({ provider, isOpen, onOpenChange }: InstantSwa
   const { valueFrom } = useSwap()
   const setTransaction = useSetTransaction()
   const openNetworks = useSwapStore(state => state.openNetworks)
-  const isLimitSwap = useIsLimitSwap()
-  const limitSwapBuyAmount = useLimitSwapBuyAmount()
   const { rateFrom, rateTo } = useSwapRates()
 
   const [quote, setQuote] = useState<(QuoteResponseRoute & { qrCodeDataURL?: string }) | undefined>(undefined)
@@ -65,7 +62,7 @@ export const InstantSwapDialog = ({ provider, isOpen, onOpenChange }: InstantSwa
   const [highPriceImpactAccepted, setHighPriceImpactAccepted] = useState(false)
 
   const priceImpact = resolvePriceImpact(quote, rateFrom, rateTo)
-  const requiresHighPriceImpactAcceptance = !isLimitSwap && !!priceImpact && priceImpact.gt(2)
+  const requiresHighPriceImpactAcceptance = !!priceImpact && priceImpact.gt(2)
   const confirmBlocked = requiresHighPriceImpactAcceptance && !highPriceImpactAccepted
 
   if (!assetFrom || !assetTo) return null
@@ -81,8 +78,6 @@ export const InstantSwapDialog = ({ provider, isOpen, onOpenChange }: InstantSwa
       provider,
       txUid: uid
     })
-
-    const sentAmount = new USwapNumber(value)
 
     setTransaction({
       uid,
@@ -100,11 +95,6 @@ export const InstantSwapDialog = ({ provider, isOpen, onOpenChange }: InstantSwa
       qrCodeData,
       depositMemo: memo,
       expiration: watchUntil(quote, expiration),
-      limitSwapMemo: isLimitSwap ? quote.memo : undefined,
-      limitPrice:
-        isLimitSwap && limitSwapBuyAmount && !sentAmount.eq(0)
-          ? USwapNumber.fromBigInt(BigInt(limitSwapBuyAmount), 8).div(sentAmount).toSignificant()
-          : undefined,
       providerSwapId: quote.meta?.houdini?.houdiniId,
       ...(openNetworks && { networkSwap: { minOutput: toBaseUnits(quote.expectedBuyAmountMaxSlippage ?? quote.expectedBuyAmount, assetTo.decimals).toString() } })
     })

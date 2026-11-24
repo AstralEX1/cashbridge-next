@@ -328,23 +328,6 @@ export const thorchainBchVaultScripts = () => {
   return bchVaults.scripts
 }
 
-export interface LimitSwapQueueItem {
-  swap: {
-    tx: {
-      id: string
-      from_address: string
-      coins: { asset: string; amount: string }[]
-      memo: string
-    }
-    target_asset: string
-    trade_target: string
-    // Lifetime in blocks, taken from the interval field of the memo the order was placed with.
-    state?: { interval?: string }
-  }
-  blocks_since_created?: string
-  time_to_expiry_blocks?: string
-}
-
 export interface TxStatusResponse {
   tx?: { id?: string; chain?: string; from_address?: string; to_address?: string; coins?: { asset: string; amount: string }[]; memo?: string }
   out_txs?: { id: string; chain: string; to_address?: string; coins: { asset: string; amount: string }[]; memo?: string }[]

@@ -24,7 +24,7 @@ const usdc = {
 }
 const bch = { assetId: NEAR_BCH, decimals: 8, blockchain: 'bch', symbol: 'BCH', price: 200, contractAddress: null }
 
-test('forward bridge quotes buy native BCH while private quotes keep their destination', () => {
+test('forward bridge quotes buy native BCH', () => {
   assert.equal(BridgeConfig.buyAsset, 'BCH.BCH')
   // buyAsset spans several lines once open-networks mode is present; pull the whole binding.
   const expression = quoteSource.match(/const buyAsset = ([\s\S]*?)\n  const sellAmount/)?.[1]?.trim()
@@ -34,14 +34,13 @@ test('forward bridge quotes buy native BCH while private quotes keep their desti
     'reverse',
     'assetFrom',
     'assetTo',
-    'isPrivateSwap',
     'BridgeConfig',
     `return (${expression})`
   )
-  assert.equal(destination(false, false, { identifier: 'BASE.USDC' }, { identifier: 'PUSD' }, false, BridgeConfig), 'BCH.BCH')
-  assert.equal(destination(false, false, { identifier: 'BASE.USDC' }, { identifier: 'ETH.ETH' }, true, BridgeConfig), 'ETH.ETH')
-  assert.equal(destination(false, true, { identifier: 'BASE.USDC' }, { identifier: 'BCH.BCH' }, false, BridgeConfig), 'BASE.USDC')
-  assert.equal(destination(true, false, { identifier: 'ETH.ETH' }, { identifier: 'BASE.USDC' }, false, BridgeConfig), 'BASE.USDC')
+  assert.equal(destination(false, false, { identifier: 'BASE.USDC' }, { identifier: 'PUSD' }, BridgeConfig), 'BCH.BCH')
+  assert.equal(destination(false, false, { identifier: 'BASE.USDC' }, { identifier: 'ETH.ETH' }, BridgeConfig), 'BCH.BCH')
+  assert.equal(destination(false, true, { identifier: 'BASE.USDC' }, { identifier: 'BCH.BCH' }, BridgeConfig), 'BASE.USDC')
+  assert.equal(destination(true, false, { identifier: 'ETH.ETH' }, { identifier: 'BASE.USDC' }, BridgeConfig), 'BASE.USDC')
   assert.match(quoteSource, /buyAsset: openNetworks \|\| reverse \? buyAsset : BridgeConfig\.buyAsset/)
   const body = nearQuoteBody(
     { sellAsset: 'BASE.USDC-0X8335', buyAsset: BridgeConfig.buyAsset, sellAmount: '10', dry: true, slippageBps: 100, now: 0 },
