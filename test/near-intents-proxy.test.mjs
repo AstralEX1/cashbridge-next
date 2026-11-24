@@ -81,6 +81,12 @@ test('a quote retries one transient gateway response before returning it', async
   const res = await call('POST', ['v0', 'quote'], { body: JSON.stringify({ dry: true }) })
   assert.equal(res.status, 200)
   assert.equal(seen.length, 2)
+  upstreamStatuses.push(502, 200)
+  assert.equal((await call('GET', ['v0', 'tokens'])).status, 200, 'the token list is read-only too')
+  assert.equal(seen.length, 4)
+  upstreamStatuses.push(502)
+  assert.equal((await call('GET', ['v0', 'status'], { query: '?depositAddress=a' })).status, 502, 'status is not retried')
+  assert.equal(seen.length, 5)
 })
 
 test('unknown paths, traversal and wrong versions are refused without contacting upstream', async () => {
