@@ -109,8 +109,8 @@ test('leaving ETH to BTC free pairs restores a quotable native-BCH bridge destin
   const body = source.match(/const inMode =[\s\S]*?if \(nextTo && nextTo !== assetTo\) setAssetTo\(nextTo\)/)?.[0]
   assert.ok(body)
   const { outputText } = ts.transpileModule(body, { compilerOptions: { target: ts.ScriptTarget.ES2022 } })
-  const repair = new Function('assets', 'assetFrom', 'assetTo', 'isPrivateTab', 'isPrivateSend', 'isAssetInMode', 'DEFAULT_SELL', 'DEFAULT_BUY', 'urlBuyAsset', 'setAssetFrom', 'setAssetTo', outputText)
-  repair(assets, state.assetFrom, state.assetTo, false, false, () => true, 'BTC.BTC', 'BCH.BCH', () => assets[2], state.setAssetFrom, state.setAssetTo)
+  const repair = new Function('assets', 'assetFrom', 'assetTo', 'isAssetInMode', 'DEFAULT_SELL', 'DEFAULT_BUY', 'urlBuyAsset', 'setAssetFrom', 'setAssetTo', outputText)
+  repair(assets, state.assetFrom, state.assetTo, () => true, 'BTC.BTC', 'BCH.BCH', () => assets[2], state.setAssetFrom, state.setAssetTo)
   assert.equal(useSwapStore.getState().assetTo.identifier, 'BCH.BCH')
   assert.equal(useSwapStore.getState().assetFrom.identifier, 'ETH.ETH')
 })

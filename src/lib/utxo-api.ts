@@ -2,6 +2,7 @@ import { binToHex, lockingBytecodeToCashAddress } from '@bitauth/libauth'
 import { address, networks, type Network } from 'bitcoinjs-lib'
 import { BCH_PREFIX, decodeTx, ELECTRUM_PROTOCOL, RpcError, txidOf, WsRpc } from '@/lib/bch'
 import { BridgeConfig } from '@/config'
+import { markDown, markUp, ordered } from '@/lib/fallback'
 
 // Keyless public explorers behind the Blockchair-shaped routes the UTXO toolbox and this app call
 // (src/app/api/blockchair), in five HTTP dialects: Esplora (mempool.space and its forks), Bitcore,
@@ -262,7 +263,13 @@ function fulcrum(url: string): Explorer {
     try {
       await rpc.open()
       await rpc.request('server.version', ['cashbridge', ELECTRUM_PROTOCOL])
-      return await run(rpc)
+      const value = await run(rpc)
+      markUp(url)
+      return value
+    } catch (error) {
+      // A server that is down or stalls is asked last for a while; an error from its node is an answer.
+      if (!(error instanceof RpcError)) markDown(url)
+      throw error
     } finally {
       rpc.close()
     }
@@ -344,8 +351,10 @@ export const UTXO_CHAINS: Record<string, { network?: Network; explorers: Explore
     network: DOGECOIN,
     explorers: [bitcore('DOGE'), blockCypher('doge'), blockbook('https://doge1.trezor.io'), blockbook('https://doge2.trezor.io'), blockbook('https://doge3.trezor.io')]
   },
-  // shortcut: the first four Fulcrum servers; an unknown transaction is asked on each in turn, so all ten would be slow.
-  'bitcoin-cash': { explorers: [...BridgeConfig.electrumUrls.slice(0, 4).map(fulcrum), blockbook('https://bch1.trezor.io')] },
+  // shortcut: four Fulcrum servers, healthy ones first; an unknown transaction is asked on each in turn, so all ten would be slow.
+  get 'bitcoin-cash'() {
+    return { explorers: [...ordered(BridgeConfig.electrumUrls).slice(0, 4).map(fulcrum), blockbook('https://bch1.trezor.io')] }
+  },
   dash: { explorers: [blockCypher('dash'), blockbook('https://dash1.trezor.io')] },
   zcash: { explorers: [blockchair('zcash'), blockbook('https://zec1.trezor.io')] }
 }

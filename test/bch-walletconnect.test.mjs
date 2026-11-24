@@ -5,7 +5,7 @@ import { test } from 'node:test'
 import { binToHex, hexToBin, secp256k1 } from '@bitauth/libauth'
 import { bindingFromPubkey } from '../src/lib/bch.ts'
 import { reviewBuild, sourcesOf } from '../src/lib/cauldron.ts'
-import { signInWallet, SignCancelled, SignDeclined, SignSessionLost, SignTimedOut, SignUndelivered } from '../src/lib/bch-signing.ts'
+import { signingNoteKey, signInWallet, SignCancelled, SignDeclined, SignSessionLost, SignTimedOut, SignUndelivered } from '../src/lib/bch-signing.ts'
 import {
   cashonizeWalletConnectUrl,
   firstP2pkhAddress,
@@ -197,4 +197,13 @@ test('Paytaca, Cashonize and Zapit WalletConnect deep links carry the pairing UR
   wallet.request = args => (order.push('request'), request(args))
   await signInWallet(walletConnectSigner(wallet, 'topic', { isLive: () => true, beforeRequest: () => order.push('open') }), binding, reviewed, 'Swap')
   assert.deepEqual(order, ['open', 'request'])
+})
+
+test('each way a signature did not happen has its own note; a lost session is not shown as an undelivered request', () => {
+  assert.equal(signingNoteKey(new SignCancelled('x')), 'signCancelled')
+  assert.equal(signingNoteKey(new SignDeclined('x')), 'signDeclined')
+  assert.equal(signingNoteKey(new SignTimedOut('x')), 'signTimedOut')
+  assert.equal(signingNoteKey(new SignSessionLost('x')), 'signSessionLost')
+  assert.equal(signingNoteKey(new SignUndelivered('x')), 'signUndelivered')
+  assert.equal(signingNoteKey(new Error('x')), undefined)
 })

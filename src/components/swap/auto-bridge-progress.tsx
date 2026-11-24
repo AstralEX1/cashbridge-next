@@ -20,12 +20,12 @@ import {
   type FlowStage,
   type FlowToken,
   thorchainTxUrl,
-  usdText,
   useCollapseOnce,
   useTokenQuoteFor,
   WaitingButton
 } from '@/components/swap/pusd-swap'
 import { useAutomaticHydrated } from '@/hooks/use-automatic-bridge'
+import { usdText } from '@/lib/bridge-summary'
 import { nearExplorerUrl } from '@/lib/near-intents'
 import { useAssets } from '@/hooks/use-assets'
 import { useRates } from '@/hooks/use-rates'

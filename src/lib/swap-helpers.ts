@@ -164,7 +164,7 @@ export const supportsHoudiniMemo = (chain: Chain) => HOUDINI_MEMO_CHAINS.include
 
 // Selling XRP privately is paid to a deposit address with Houdini's destination tag. The toolboxes attach XRP
 // memos as free text, which would land untagged, so it is never signed in-app - even with a wallet connected.
-export const isDepositOnlyPrivateSell = (isPrivateSwap: boolean, sellChain?: Chain) => isPrivateSwap && sellChain === Chain.Ripple
+export const isDepositOnlyPrivateSell = (sellChain?: Chain) => sellChain === Chain.Ripple
 
 // Free text up to Houdini's `destinationTag` limit - except an XRP destination tag, which is a uint32:
 // Houdini refuses a text tag when it creates the order ("Unable to perform exchange, no available paths").

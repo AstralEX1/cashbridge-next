@@ -30,6 +30,17 @@ export class SignUndelivered extends Error {}
 // connected again. A kind of undelivered request, so every caller that handles one handles this too.
 export class SignSessionLost extends SignUndelivered {}
 
+// The 'reverse.*' message key of the note for a signature that did not happen (lost session before undelivered, its
+// parent); undefined for any other error.
+const NOTE_KEYS = [
+  [SignCancelled, 'signCancelled'],
+  [SignDeclined, 'signDeclined'],
+  [SignTimedOut, 'signTimedOut'],
+  [SignSessionLost, 'signSessionLost'],
+  [SignUndelivered, 'signUndelivered']
+] as const
+export const signingNoteKey = (error: unknown) => NOTE_KEYS.find(([kind]) => error instanceof kind)?.[1]
+
 const DECLINED = /reject|declin|denied|cancel|refus/i
 // WizardConnect's own wording when no relay took the request.
 const UNDELIVERED = /failed to publish|not connected|closed/i

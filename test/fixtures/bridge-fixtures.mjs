@@ -94,10 +94,7 @@ export const swapBuild = ({
     source_outputs: sources,
     inputs_to_sign: [...funding, ...extraInputs].map((_, i) => i),
     expected_output: pusdOut.toString(),
-    fee_sats: '0',
-    fee_token_amount: '0',
-    miner_fee_sats: minerFee.toString(),
-    route: { kind: 'cauldron', input_amount: sellSats.toString(), input_is_bch: true, output_amount: pusdOut.toString(), output_is_bch: false, market_pre_price: '1', market_post_price: '1', pools: 1 }
+    miner_fee_sats: minerFee.toString()
   }
 }
 

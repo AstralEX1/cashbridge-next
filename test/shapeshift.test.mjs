@@ -113,6 +113,19 @@ describe('getShapeShiftBridgeRoute', async () => {
     assert.equal(route.estimatedTime.total, 152, '1Click times the swap, not ShapeShift’s flat estimate')
   })
 
+  it('shows the minimum 1Click enforces when it is below ShapeShift’s, and refuses a deadline too near to send', async () => {
+    const route = await withFetch(() => getShapeShiftBridgeRoute(request))
+    assert.equal(route.expectedBuyAmount, '0.06')
+    assert.equal(route.expectedBuyAmountMaxSlippage, '0.059', '1Click’s minAmountOut, not 1% under ShapeShift’s figure')
+    await assert.rejects(
+      withFetch(() => {
+        edit = s => ({ ...s, quoteResponse: { ...s.quoteResponse, quoteRequest: { ...s.quoteResponse.quoteRequest, deadline: new Date(Date.now() + 5 * 60_000).toISOString() } } })
+        return getShapeShiftBridgeRoute(request)
+      }),
+      /too soon/
+    )
+  })
+
   it('accepts the same token through another 1Click row', async () => {
     const route = await withFetch(() => {
       edit = s => ({ ...s, quoteResponse: { ...s.quoteResponse, quoteRequest: { ...s.quoteResponse.quoteRequest, originAsset: HOT_USDC } } })

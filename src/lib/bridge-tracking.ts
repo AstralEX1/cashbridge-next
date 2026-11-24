@@ -30,7 +30,8 @@ export const firstLegFromChain = (
       stage: confirmed && spendable ? (native ? 'kept_bch' : 'bch_ready') : 'bch_unconfirmed',
       received: outputs,
       firstLeg: { ...firstLeg, result: 'swapped', receivedAt: op.firstLeg.receivedAt ?? Date.now() },
-      error: !native && outputs.some(o => !o.unspent && o.confirmations > 0) ? 'Some received BCH has already been spent' : undefined
+      // An output already gone stays unconfirmed here; the received-BCH check decides whether it was spent.
+      error: undefined
     }
   }
 

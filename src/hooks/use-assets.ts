@@ -8,7 +8,6 @@ import { getMidgardPools } from '@/lib/api'
 import { getNearTokens, mergeNearAssets } from '@/lib/near-intents'
 import { thorchainTokenLogo } from '@/lib/token-logos'
 import type { NearUnquotable } from '@/lib/near-quotable'
-import { useIsPrivateSwap } from '@/store/private-swap-store'
 import { isNetworkAsset, useSwapStore } from '@/store/swap-store'
 
 // Chains a private (Houdini) swap may start or end on. Houdini lists more, but an asset is only
@@ -44,13 +43,11 @@ export const PRIVATE_SWAP_CHAINS: Chain[] = [
   Chain.Zcash
 ]
 
-// The providers whose listing makes an asset selectable in the current tab: the native protocols
-// on SWAP/LIMIT (plus NEAR Intents when enabled), Houdini alone on PRIVATE. An asset both list
-// appears in both. NEAR-only rows stay visible whenever Intents is on so Manual and the Router
+// The providers whose listing makes an asset selectable: the native protocols (plus NEAR Intents
+// when enabled). NEAR-only rows stay visible whenever Intents is on so Manual and the Router
 // share one picker; they are not gated on the live quote path.
-export const isAssetInMode = (asset: Asset, isPrivateSwap: boolean): boolean => {
+export const isAssetInMode = (asset: Asset): boolean => {
   const providers = asset.providers ?? []
-  if (isPrivateSwap) return providers.includes(AppConfig.privateProvider)
   if (providers.some(p => AppConfig.providers.includes(p))) return true
   return BridgeConfig.nearIntents && providers.includes(ProviderName.NEAR)
 }
@@ -163,11 +160,10 @@ export const useAssets = (): { assets?: Asset[]; isLoading: boolean } => {
   }
 }
 
-// The assets selectable in the current tab (see isAssetInMode). On the bridge, a NEAR-only row NEAR Intents quotes no
+// The assets selectable in the current mode (see isAssetInMode). On the bridge, a NEAR-only row NEAR Intents quotes no
 // route for in this direction is left out; until that list arrives, or when it fails, every row shows.
 export const useModeAssets = (): { assets?: Asset[]; isLoading: boolean } => {
   const { assets, isLoading } = useAssets()
-  const isPrivateSwap = useIsPrivateSwap()
   const openNetworks = useSwapStore(state => state.openNetworks)
   const reverse = useSwapStore(state => state.reverse)
   const { data: unquotable } = useQuery({
@@ -178,14 +174,14 @@ export const useModeAssets = (): { assets?: Asset[]; isLoading: boolean } => {
     refetchOnWindowFocus: false,
     retry: false
   })
-  const hidden = openNetworks || isPrivateSwap ? undefined : unquotable?.[reverse ? 'reverse' : 'forward']
+  const hidden = openNetworks ? undefined : unquotable?.[reverse ? 'reverse' : 'forward']
 
   const modeAssets = useMemo(
     () =>
       assets?.filter(asset =>
-        openNetworks ? isNetworkAsset(asset) : isAssetInMode(asset, isPrivateSwap) && !(hidden?.includes(asset.identifier) && isNearOnlyAsset(asset))
+        openNetworks ? isNetworkAsset(asset) : isAssetInMode(asset) && !(hidden?.includes(asset.identifier) && isNearOnlyAsset(asset))
       ),
-    [assets, isPrivateSwap, openNetworks, hidden]
+    [assets, openNetworks, hidden]
   )
 
   return { assets: modeAssets, isLoading }

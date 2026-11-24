@@ -54,6 +54,16 @@ test('an allowed quote reaches upstream with the partner JWT; the response carri
   for (const [, v] of res.headers) assert.ok(!v.includes(JWT))
 })
 
+test('a quote that adds a partner fee or another referral is refused before it reaches 1Click', async () => {
+  seen.length = 0
+  for (const extra of [{ appFees: [{ recipient: 'someone.near', fee: 100 }] }, { referral: 'someone-else' }]) {
+    const res = await call('POST', ['v0', 'quote'], { body: JSON.stringify({ dry: true, swapType: 'EXACT_INPUT', ...extra }) })
+    assert.equal(res.status, 400)
+  }
+  assert.equal(seen.length, 0)
+  assert.equal((await call('POST', ['v0', 'quote'], { body: JSON.stringify({ dry: true, referral: 'cashbridge' }) })).status, 200)
+})
+
 test('tokens and status are forwarded; deposit/submit is POST only', async () => {
   seen.length = 0
   assert.equal((await call('GET', ['v0', 'tokens'])).status, 200)
@@ -71,6 +81,12 @@ test('a quote retries one transient gateway response before returning it', async
   const res = await call('POST', ['v0', 'quote'], { body: JSON.stringify({ dry: true }) })
   assert.equal(res.status, 200)
   assert.equal(seen.length, 2)
+  upstreamStatuses.push(502, 200)
+  assert.equal((await call('GET', ['v0', 'tokens'])).status, 200, 'the token list is read-only too')
+  assert.equal(seen.length, 4)
+  upstreamStatuses.push(502)
+  assert.equal((await call('GET', ['v0', 'status'], { query: '?depositAddress=a' })).status, 502, 'status is not retried')
+  assert.equal(seen.length, 5)
 })
 
 test('unknown paths, traversal and wrong versions are refused without contacting upstream', async () => {

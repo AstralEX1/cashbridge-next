@@ -34,11 +34,6 @@ import { useRates } from '@/hooks/use-rates'
 import { useAssetFrom } from '@/hooks/use-swap'
 import { useTokenSale } from '@/hooks/use-token-sale'
 import { useSetExternalWalletMode } from '@/hooks/use-wallets'
-import { binToHex } from '@bitauth/libauth'
-import { checkUnspent, findThorchainOutbound, getRawTransaction, getTransactionState, historyIncludes } from '@/lib/bch'
-import { orderRequest } from '@/lib/auto-bridge-client'
-import type { PublicOrder } from '@/lib/auto-bridge-contract'
-import { returnFromPage } from '@/lib/page-settle'
 import { useAutomaticBridge } from '@/hooks/use-automatic-bridge'
 import { prepareRouterSale } from '@/lib/router-sale-client'
 import { formatBaseUnits, toBaseUnits } from '@/lib/bridge'
@@ -46,24 +41,19 @@ import { withLock } from '@/lib/bridge-first-leg'
 import { bridgeCompletionTransactions } from '@/lib/bridge-completion'
 import { hasSecondAuthorization, OPEN_SECOND_REQUEST_NOTE, recoverSecondSigning, rememberAttempt, sameSecondAttempt, signingDefinitelyStopped, signingRequest } from '@/lib/bridge-signing-recovery'
 import { formatStepTime, stepTime } from '@/lib/bridge-tracking'
-import { bridgeName, formatAmount, formatMinutes, formatPercent, formatUsd, PUSD_LEG_SECONDS, valueImpact } from '@/lib/bridge-summary'
+import { bridgeName, formatAmount, formatMinutes, formatPercent, formatUsd, PUSD_LEG_SECONDS, timeOf, usdText, valueImpact } from '@/lib/bridge-summary'
 import { isDollarStable } from '@/lib/dollar-stable'
 import { type ReviewedSwap } from '@/lib/cauldron'
-import { SignCancelled, SignDeclined, SignSessionLost, SignTimedOut, SignUndelivered } from '@/lib/bch-signing'
+import { SignCancelled, SignTimedOut, signingNoteKey } from '@/lib/bch-signing'
 import { type CauldronToken, PUSD_TOKEN } from '@/lib/cauldron-tokens'
 import { readableError } from '@/lib/errors'
-import { getTxStatus } from '@/lib/api'
 import {
   bchAsset,
   blockHeight,
   broadcastSale,
   broadcastDeposit,
   broadcastRouterSend,
-  confirmReportedPayout,
-  depositReadyAt,
   destinationChainOf,
-  findPayout,
-  nearReverseOutcome,
   prepareBchDeposit,
   prepareDeposit,
   prepareNearBchDeposit,
@@ -79,18 +69,17 @@ import {
   signingInputs,
   signInWallet,
   startReverseOperation,
-  tokenAsset,
-  unsignedOutcome
+  tokenAsset
 } from '@/lib/reverse-bridge'
 import { DEPOSIT_FEE_RESERVE } from '@/lib/thorchain-deposit'
 import { isNearRoute, nearExplorerUrl, submitNearDeposit } from '@/lib/near-intents'
 import { isShapeShiftRoute, SHAPESHIFT_PROVIDER } from '@/lib/shapeshift'
 import { resolveFees } from '@/lib/swap-helpers'
-import { isEvmChain } from '@/lib/payout-chains'
 import { generateId } from '@/lib/utils'
 import { useSwapStore } from '@/store/swap-store'
 import {
   type BridgeOperation,
+  freshOperation,
   getActiveBridge,
   isBridgeTerminal,
   isBridgeWaiting,
@@ -110,17 +99,8 @@ type BridgeTx = SwapTransaction & { bridge: BridgeOperation }
 type Update = ReturnType<typeof useUpdateBridge>
 
 const formatBch = (sats: bigint | string) => formatBaseUnits(sats, 8)
-// How long the payout is looked for in the router's logs alone before THORNode's report is also read.
-const REPORTED_PAYOUT_AFTER_MS = 3 * 60_000
 const OPEN_REQUEST_NOTE = `Your BCH wallet still has this request: reject it there. If it is approved, the wallet may send it; this transfer waits up to ${Math.ceil(OPEN_REQUEST_MS / 60_000)} minutes to see.`
 const toNumber = (value?: USwapNumber) => (value ? Number(value.toSignificant(12)) : undefined)
-const usdText = (value?: number) => (value === undefined || !Number.isFinite(value) ? undefined : formatUsd(value))
-
-const freshOperation = async (uid: string) => {
-  await transactionStore.persist.rehydrate()
-  const tx = transactionStore.getState().transactions.find(t => t.uid === uid)
-  return tx && tx.kind !== 'send' && tx.bridge ? (tx as BridgeTx) : undefined
-}
 
 // Signs a prepared deposit for the operation `uid` and broadcasts it.
 const sendDeposit = async (uid: string, prepared: PreparedDeposit, update: Update, wallet: ReturnType<typeof useBchWallet>, signal?: AbortSignal, attempt = generateId()) => {
@@ -184,185 +164,6 @@ const sendDeposit = async (uid: string, prepared: PreparedDeposit, update: Updat
   if (!accepted) throw new Error('This transfer moved on before the wallet answered')
   await broadcastDeposit(uid, signedHex, txid, update)
   if (near) void submitNearDeposit(near.depositAddress, txid)
-}
-
-// --- Tracking ------------------------------------------------------------------------------------
-
-// BCH a transaction pays to the bound address, read from the chain.
-const bchPaidTo = async (txid: string, lockingBytecode: string) => {
-  const raw = await getRawTransaction(txid)
-  if (!raw) throw new Error('The BCH server does not have this transaction yet')
-  return raw.tx.outputs
-    .filter(o => !o.token && binToHex(o.lockingBytecode) === lockingBytecode)
-    .reduce((sum, o) => sum + o.valueSatoshis, 0n)
-    .toString()
-}
-
-// Coins still at the sale contract after its refund time go back to the user's wallet through `expire`, which needs no
-// key. True when the page sent them.
-const returnSale = async (tx: BridgeTx, order: PublicOrder, update: Update) => {
-  if (!(await returnFromPage(order, undefined))) return false
-  update(tx.uid, () => ({ stage: 'failed', error: 'The Cashbridge Router did not finish in time, so this page sent the coins at its contract back to your wallet' }))
-  return true
-}
-
-// A transfer the Cashbridge Router runs: the user's send to the order's sale contract (sent again while the chain has
-// not seen it), then the Router's sale and THORChain deposit read from the order. The payout is then found on the
-// destination chain like any deposit's. True when the operation needs nothing more from syncReverse this time.
-const syncRouterOrder = async (tx: BridgeTx, update: Update) => {
-  const op = tx.bridge
-  const reverse = op.reverse!
-  const router = reverse.router!
-  const before = ['first_leg_pending', 'first_leg_unknown'].includes(op.stage)
-  const requestEnded = Date.now() - (reverse.signing?.sentAt ?? 0) > OPEN_REQUEST_MS
-  if (router.sendTxid && router.signedHex && before && !(await getTransactionState(router.sendTxid)).seen)
-    await broadcastRouterSend(tx.uid, router.signedHex, router.sendTxid, update)
-  let order: PublicOrder
-  try {
-    order = await orderRequest({ id: router.id, capability: router.capability }, 'GET')
-  } catch (error) {
-    // A stopped Router cannot strand the coins: past the refund time the page sends them back from the saved terms.
-    if (router.order && (await returnSale(tx, router.order, update))) return true
-    throw error
-  }
-  if (order.depositAddress !== router.depositAddress) throw new Error('The Cashbridge Router order changed its address')
-  if (await returnSale(tx, order, update)) return true
-  const accepted = (kind: 'swap' | 'deposit' | 'refund') => order.attempts.find(a => a.kind === kind && a.status === 'accepted')
-  const [sold, deposited, returned] = [accepted('swap'), accepted('deposit'), accepted('refund')]
-  if (before) {
-    if (deposited && order.sale) {
-      update(tx.uid, current => ({
-        stage: 'second_leg_pending',
-        error: undefined,
-        reverse: {
-          ...current.reverse!,
-          sale: { ...current.reverse!.sale!, txid: sold?.txid },
-          deposit: {
-            attempt: generateId(),
-            amountSats: deposited.pusdOut,
-            minerFeeSats: '0',
-            memo: order.sale!.memo,
-            inboundAddress: order.sale!.vaultAddress,
-            router: router.payoutRouter,
-            startBlock: router.startBlock,
-            expectedOut: tx.amountTo,
-            txid: deposited.txid,
-            signedAt: Date.now()
-          }
-        }
-      }))
-    } else if (order.state === 'refunded' || (!router.sendTxid && order.receivedSats === '0' && !order.attempts.length && requestEnded)) {
-      // Given back before any deposit (or never sent: the page went away mid-signing and the contract got nothing while
-      // the wallet could still answer).
-      update(tx.uid, () => ({ stage: 'failed', error: router.sendTxid ? 'The Cashbridge Router sent the coins back to your wallet' : 'Nothing was signed, so nothing was sent' }))
-    } else if (order.state === 'manual_review') {
-      update(tx.uid, () => ({ error: 'The Cashbridge Router stopped this order for a manual check' }))
-    }
-    return true
-  }
-  // THORChain refunded to the contract and the Router gave the BCH back (a refund to the memo's address is found as usual).
-  if (op.stage === 'second_leg_pending' && order.state === 'refunded' && returned) {
-    const amountSats = await bchPaidTo(returned.txid, op.binding.lockingBytecode)
-    update(tx.uid, current => ({ stage: 'refunded', reverse: { ...current.reverse!, refund: { txid: returned.txid, amountSats } } }))
-    return true
-  }
-  return false
-}
-
-// Progress from the chains: the BCH transactions on Fulcrum, the payout as the router's TransferOut
-// event on an EVM chain's RPC or the outbound on another chain's own node, a refund as THORChain's REFUND:<deposit> payment at the bound address.
-export const syncReverse = async (tx: BridgeTx, update: Update) => {
-  const op = tx.bridge
-  const reverse = op.reverse
-  if (!reverse) return
-  if (reverse.router && (await syncRouterOrder(tx, update))) return
-  if (op.stage !== 'second_leg_signing' && ['bch_ready', 'first_leg_unknown', 'second_leg_signed', 'second_leg_unknown', 'second_leg_pending'].includes(op.stage) &&
-    (reverse.deposit?.signing || reverse.priorDeposits?.length || (op.stage === 'second_leg_unknown' && !reverse.deposit?.txid))) {
-    const recovery = await recoverSecondSigning(op)
-    if (recovery) {
-      update(tx.uid, current => sameSecondAttempt(current, op) ? recovery : {})
-      if (recovery.stage !== 'second_leg_pending') return
-      // Continue payout tracking on the next poll with the recovered deposit's metadata.
-      if (!reverse.deposit?.txid || reverse.deposit.txid !== recovery.reverse?.deposit?.txid) return
-    }
-  }
-  const sale = reverse.sale
-  const deposit = reverse.deposit
-  switch (op.stage) {
-    case 'first_leg_unknown': {
-      if (!sale?.txid) {
-        const outcome = await unsignedOutcome(op)
-        return outcome && update(tx.uid, () => outcome)
-      }
-      const state = await getTransactionState(sale.txid)
-      if (state.seen) update(tx.uid, () => ({ stage: 'bch_ready', error: undefined }))
-      return
-    }
-    case 'first_leg_pending': {
-      if (sale?.txid && (await getTransactionState(sale.txid)).seen) update(tx.uid, () => ({ stage: 'bch_ready', error: undefined }))
-      return
-    }
-    case 'bch_ready': {
-      const outputs = sale?.outputs ?? []
-      if (!outputs.length) return
-      const checked = await checkUnspent(op.binding.lockingBytecode, outputs)
-      if (checked.every(o => o.unspent)) return
-      // Spent by one of this operation's deposits (a lost broadcast answer) is still ours.
-      const ours = await historyIncludes(op.binding.lockingBytecode, reverse.priorDepositTxids ?? [])
-      if (ours.length === 0) update(tx.uid, current => sameSecondAttempt(current, op) ? { stage: 'kept_bch', error: 'The BCH from the swap was spent outside this app' } : {})
-      return
-    }
-    case 'second_leg_signed':
-    case 'second_leg_unknown': {
-      if (deposit?.txid && (await getTransactionState(deposit.txid)).seen) update(tx.uid, () => ({ stage: 'second_leg_pending', error: undefined }))
-      return
-    }
-    case 'second_leg_pending': {
-      if (!deposit?.txid) return
-      if (op.near) {
-        const outcome = await nearReverseOutcome(op)
-        if (!outcome) return op.error && update(tx.uid, () => ({ error: undefined }))
-        if ('payout' in outcome) return update(tx.uid, current => ({ stage: 'completed', error: undefined, reverse: { ...current.reverse!, payout: outcome.payout } }))
-        if ('error' in outcome) return outcome.error !== op.error && update(tx.uid, () => ({ error: outcome.error }))
-        return update(tx.uid, current => ({
-          stage: 'refunded',
-          error: undefined,
-          reverse: { ...current.reverse!, refund: { amountSats: outcome.refundSats ?? current.reverse!.deposit!.amountSats } }
-        }))
-      }
-      const [found, refund, readyAt] = await Promise.all([
-        findPayout(op).catch(() => undefined),
-        findThorchainOutbound(deposit.txid, op.binding.lockingBytecode, 'REFUND').catch(() => undefined),
-        getTxStatus(deposit.txid)
-          .then(status => depositReadyAt(status))
-          .catch(() => undefined)
-      ])
-      // On an EVM chain THORChain's own report fills the gap after a while; elsewhere it names the
-      // outbound from the start. Either way the payout is checked on the destination chain.
-      const reportedNow = !isEvmChain(destinationChainOf(reverse.buyAsset)) || Date.now() - (deposit.signedAt ?? 0) > REPORTED_PAYOUT_AFTER_MS
-      const reported = !found?.payout && reportedNow ? await confirmReportedPayout(op).catch(() => undefined) : undefined
-      if (reported) return update(tx.uid, current => ({ stage: 'completed', reverse: { ...current.reverse!, payout: reported } }))
-      if (found?.payout) {
-        return update(tx.uid, current => ({
-          stage: 'completed',
-          reverse: { ...current.reverse!, payout: found.payout, deposit: { ...current.reverse!.deposit!, scannedBlock: found.scannedBlock } }
-        }))
-      }
-      if (refund?.kind === 'ok') {
-        return update(tx.uid, current => ({
-          stage: 'refunded',
-          reverse: { ...current.reverse!, refund: { txid: refund.outputs[0].txid, amountSats: refund.total } }
-        }))
-      }
-      const scannedBlock = found?.scannedBlock ?? deposit.scannedBlock
-      if (scannedBlock !== deposit.scannedBlock || (readyAt !== undefined && readyAt !== deposit.readyAt)) {
-        update(tx.uid, current => ({
-          reverse: { ...current.reverse!, deposit: { ...current.reverse!.deposit!, scannedBlock, readyAt: readyAt ?? current.reverse!.deposit!.readyAt } }
-        }))
-      }
-      return
-    }
-  }
 }
 
 // --- Form button ---------------------------------------------------------------------------------
@@ -794,11 +595,7 @@ export const ReverseConfirmDialog = ({ isOpen, onOpenChange, onShowBridge }: { i
         // Another operation still needs this wallet: show it instead of a dead end.
         onOpenChange(false)
         onShowBridge?.()
-      } else if (error instanceof SignCancelled) setNote(tReverse('signCancelled'))
-      else if (error instanceof SignDeclined) setNote(tReverse('signDeclined', { wallet: walletName }))
-      else if (error instanceof SignTimedOut) setNote(tReverse('signTimedOut', { wallet: walletName }))
-      else if (error instanceof SignSessionLost) setNote(tReverse('signSessionLost', { wallet: walletName }))
-      else if (error instanceof SignUndelivered) setNote(tReverse('signUndelivered', { wallet: walletName }))
+      } else if (signingNoteKey(error)) setNote(tReverse(signingNoteKey(error)!, { wallet: walletName }))
       else {
         console.warn('Reverse bridge failed to start', error)
         setNote(error instanceof ReverseBlocked ? error.message : readableError(error, tSwap('toast.errorSubmitting')))
@@ -987,8 +784,6 @@ export const ReverseConfirmDialog = ({ isOpen, onOpenChange, onShowBridge }: { i
 
 // --- Progress screen -----------------------------------------------------------------------------
 
-const timeOf = (ms: number) => new Date(ms).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
-
 // Step 2 of a token operation, ready to sign: the deposit freshly quoted and built on the BCH the
 // sale paid, its figures shown, then signed in the BCH wallet.
 const useDepositStep = (tx: BridgeTx) => {
@@ -1063,11 +858,8 @@ const useDepositStep = (tx: BridgeTx) => {
         retry = signingDefinitelyStopped(e)
         return retry ? { stage: 'bch_ready', reverse: { ...reverse, deposit: undefined } } : { stage: 'second_leg_unknown', error: OPEN_SECOND_REQUEST_NOTE }
       })
-      if (e instanceof SignCancelled) setNote(t('reverse.signCancelled'))
-      else if (e instanceof SignDeclined) setNote(t('reverse.signDeclined', { wallet: walletName }))
-      else if (e instanceof SignTimedOut) setNote(t('reverse.signTimedOut', { wallet: walletName }))
-      else if (e instanceof SignSessionLost) setNote(t('reverse.signSessionLost', { wallet: walletName }))
-      else if (e instanceof SignUndelivered) setNote(t('reverse.signUndelivered', { wallet: walletName }))
+      const noteKey = signingNoteKey(e)
+      if (noteKey) setNote(t(`reverse.${noteKey}`, { wallet: walletName }))
       else setError(readableError(e, t('reverse.prepareFailed')))
       if (retry) await prepared.refetch()
     } finally {

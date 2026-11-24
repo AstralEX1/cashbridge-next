@@ -147,3 +147,6 @@ export const firstLegSeconds = (estimated?: { inbound?: number; swap?: number; o
 
 // The bridge by name. ShapeShift's BCH swaps are NEAR Intents swaps it quoted, so they carry both marks.
 export const bridgeName = (via: { near?: boolean; shapeshift?: boolean }) => (via.shapeshift ? 'ShapeShift' : via.near ? 'NEAR Intents' : 'THORChain')
+
+export const usdText = (value?: number) => (value === undefined || !Number.isFinite(value) ? undefined : formatUsd(value))
+export const timeOf = (ms: number) => new Date(ms).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })

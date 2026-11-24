@@ -153,6 +153,21 @@ test('restoring a stale database cannot allocate another address or sign, even w
   } finally { rmSync(directory, { recursive: true, force: true }) }
 })
 
+test('unpaid orders do not use up the Router\'s capacity, while one with a source payment does', () => {
+  // The limit holds two orders' worth; the open one from setup is unpaid.
+  const env = setup()
+  try {
+    const more = () => env.store.create(randomUUID(), randomBytes(32).toString('hex'), intent, '200', 200)
+    more()
+    const paid = more()
+    env.store.update(paid.id, paid.version, { sourceHash: solana })
+    more()
+    const second = more()
+    env.store.update(second.id, second.version, { sourceHash: 'AB'.repeat(32) })
+    assert.throws(more, error => error.status === 503)
+  } finally { env.store.close() }
+})
+
 test('closed admission preserves existing idempotent creates, status and source hints', async () => {
   const env = setup()
   const service = { store: env.store, quote: async () => ({ output: 1000n }), admit: () => false }
@@ -174,6 +189,32 @@ test('status polling does not exhaust the public write bucket', async () => {
     for (let i = 0; i < 11; i++) assert.equal((await forwardOrder(req(undefined, cap, 'GET', ip), id)).status, 503)
     assert.equal((await forwardOrder(req({}, cap, 'POST', ip), id)).status, 503)
   } finally { if (old === undefined) delete process.env.AUTO_BRIDGE_SOCKET; else process.env.AUTO_BRIDGE_SOCKET = old }
+})
+
+test('the order proxy refuses a body over 4096 bytes before calling the Router', async () => {
+  const response = await forwardOrder(req({ note: 'a'.repeat(4096) }, randomBytes(32).toString('hex')))
+  assert.equal(response.status, 413)
+  assert.deepEqual(await response.json(), { error: 'Request body too large' })
+})
+
+test('a pass that writes the same observation again leaves the stale-restore guard alone', () => {
+  const directory = mkdtempSync(join(tmpdir(), 'cashbridge-guard-same-'))
+  const path = join(directory, 'orders.sqlite')
+  const env = setup(path)
+  const guard = () => readFileSync(`${path}.guard`, 'utf8').trim()
+  const observedFunding = [{ txid: 'cd'.repeat(32), vout: 0, value: '1000000', confirmations: 0, unspent: true }]
+  try {
+    assert.equal(env.store.update(env.id, env.store.get(env.id).version, { observedFunding, lastCheckedAt: 1 }), true)
+    const after = guard()
+    assert.equal(env.store.update(env.id, env.store.get(env.id).version, { observedFunding, lastCheckedAt: 2, error: undefined }), true)
+    assert.equal(guard(), after, 'nothing new: no guard write')
+    assert.equal(env.store.get(env.id).lastCheckedAt, 2)
+    assert.equal(env.store.update(env.id, env.store.get(env.id).version, { observedFunding: [{ ...observedFunding[0], confirmations: 1 }], lastCheckedAt: 3 }), true)
+    assert.notEqual(guard(), after, 'a real change still moves the guard')
+  } finally {
+    env.store.close()
+    rmSync(directory, { recursive: true, force: true })
+  }
 })
 
 test('a failed commit does not leave the guard ahead of the database', () => {

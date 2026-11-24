@@ -28,3 +28,33 @@ test('only a plain no-route answer hides a NEAR token, one direction at a time',
   assert.ok(asked.some(([sell, buy, amount]) => sell === 'ETH.ETH' && buy === 'BCH.BCH' && amount === '0.03125000'), 'probed with $50 of the token')
   assert.deepEqual(await findNearUnquotable(tokens, quote, Date.now() - 1), { forward: [], reverse: [] }, 'past the deadline nothing is hidden')
 })
+
+test('a quotable list that could not be built is not cached', async t => {
+  const { GET } = await import('../src/app/api/near-intents/quotable/route.ts')
+  t.mock.method(globalThis, 'fetch', async () => new Response('down', { status: 503 }))
+  const res = await GET()
+  assert.deepEqual(await res.json(), { forward: [], reverse: [] })
+  assert.equal(res.headers.get('cache-control'), 'no-store')
+})
+
+test('the 1Click token list is read again after five minutes, and a failed read keeps the last list', async t => {
+  const { getNearTokens } = await import('../src/lib/near-intents.ts')
+  t.mock.timers.enable({ apis: ['Date'], now: 1_000_000 })
+  let answer = [{ symbol: 'A' }]
+  let reads = 0
+  t.mock.method(globalThis, 'fetch', async () => {
+    reads++
+    return answer ? Response.json(answer) : new Response('down', { status: 503 })
+  })
+  assert.deepEqual(await getNearTokens(), [{ symbol: 'A' }])
+  answer = [{ symbol: 'B' }]
+  assert.deepEqual(await getNearTokens(), [{ symbol: 'A' }], 'kept while fresh')
+  t.mock.timers.tick(5 * 60_000 + 1)
+  assert.deepEqual(await getNearTokens(), [{ symbol: 'B' }], 'read again once old')
+  t.mock.timers.tick(5 * 60_000 + 1)
+  answer = undefined
+  assert.deepEqual(await getNearTokens(), [{ symbol: 'B' }], 'a failed read serves the last list')
+  answer = [{ symbol: 'C' }]
+  assert.deepEqual(await getNearTokens(), [{ symbol: 'C' }], 'and asks again on the next call')
+  assert.equal(reads, 4)
+})

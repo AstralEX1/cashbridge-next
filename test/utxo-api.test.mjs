@@ -424,6 +424,10 @@ test('a Fulcrum server that is down or answers another transaction hands over to
   fulcrumServers({ [LOPING]: fulcrumWith({ 'blockchain.transaction.get': ([, verbose]) => ({ result: verbose ? {} : bchHex }) }) })
   const mempool = await call(['bitcoin-cash', 'dashboards', 'transaction', bchHash])
   assert.equal(mempool.body.data[bchHash].transaction.block_id, -1)
+  // The dead server is asked last for a while: the next call starts with the one that answered.
+  sockets.length = 0
+  assert.deepEqual((await call(['bitcoin-cash', 'raw', 'transaction', bchHash])).body.data, { [bchHash]: { raw_transaction: bchHex } })
+  assert.equal(sockets[0].url, LOPING)
 
   fulcrumServers({ [IMAGINARY]: fulcrumWith({ 'blockchain.transaction.get': () => ({ result: '0200' }) }), [LOPING]: fulcrumWith() })
   assert.deepEqual((await call(['bitcoin-cash', 'raw', 'transaction', bchHash])).body.data, { [bchHash]: { raw_transaction: bchHex } })

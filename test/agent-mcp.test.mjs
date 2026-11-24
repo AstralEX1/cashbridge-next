@@ -450,6 +450,11 @@ test('ShapeShift prepares a plain deposit-address transfer', async () => {
   assert.equal(data.transactions[0].step, 'transfer')
   const status = await call('get_bridge_status', { shapeshift_quote_id: 'ss-quote-1' })
   assert.equal(status.structuredContent.status, 'pending')
+  // ShapeShift takes no source notice: the call is accepted but says nothing was reported.
+  const report = await call('report_source_transaction', { shapeshift_quote_id: 'ss-quote-1', source_tx: `0x${'ab'.repeat(32)}` })
+  assert.equal(report.isError, undefined, report.content[0].text)
+  assert.equal(report.structuredContent.reported, false)
+  assert.match(report.structuredContent.note, /needs no report/)
 })
 
 test('a token name with an extra dash still pays the token contract, never the gas coin', async () => {

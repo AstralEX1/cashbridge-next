@@ -27,7 +27,6 @@ import { useResolveSource } from '@/hooks/use-resolve-source'
 import { useSetAssetFrom, useSetAssetTo } from '@/hooks/use-swap'
 import { useTradingHalt } from '@/hooks/use-trading-halt'
 import { urlBuyAsset, useUrlParams } from '@/hooks/use-url-params'
-import { useIsPrivateSend } from '@/store/limit-swap-store'
 import { isNetworkAsset, isReverseTargetAsset, useSwapStore } from '@/store/swap-store'
 import { getActiveBridge } from '@/store/transaction-store'
 import { useActiveBridge } from '@/hooks/use-bridges'
@@ -58,7 +57,6 @@ export const Swap = () => {
   }, [progressReadyId])
   const setAssetFrom = useSetAssetFrom()
   const setAssetTo = useSetAssetTo()
-  const isPrivateSend = useIsPrivateSend()
   const pairKey = useSwapStore(state => `${state.assetFrom?.identifier}|${state.assetTo?.identifier}`)
   const reverse = useSwapStore(state => state.reverse)
   const openNetworks = useSwapStore(state => state.openNetworks)
@@ -71,16 +69,14 @@ export const Swap = () => {
   const searchParams = useSearchParams()
   const flowPreview = process.env.NODE_ENV !== 'production' ? searchParams.get('bridgeFlowPreview') : null
 
-  const isPrivateTab = useUrlParams()
+  useUrlParams()
   useResolveSource()
 
   useEffect(() => {
     AssetValue.loadStaticAssets()
   }, [])
 
-  // Each tab has its own asset list (the native protocols' or Houdini's). Switching tabs keeps a
-  // selection both list and replaces one only the other does, so the form never quotes an asset
-  // the current provider does not know. Leaving a private send restores the URL's buy asset.
+  // An asset the native protocols do not list is replaced, so the form never quotes one they do not know.
   useEffect(() => {
     if (!assets?.length || openNetworks) return
 
@@ -88,7 +84,7 @@ export const Swap = () => {
     // the pair from the URL in this same commit, and the closure still holds the empty pair.
     const { assetFrom, assetTo } = useSwapStore.getState()
 
-    const inMode = (asset?: Asset) => !!asset && isAssetInMode(asset, isPrivateTab)
+    const inMode = (asset?: Asset) => !!asset && isAssetInMode(asset)
     // Defaults before "any asset", so a fallback clashing with `other` doesn't land on the list's first entry.
     const replacement = (fallback: string, other?: Asset) => {
       const usable = (a: Asset) => inMode(a) && a.identifier !== other?.identifier
@@ -99,15 +95,15 @@ export const Swap = () => {
       return assets.find(usable)
     }
 
-    const nextFrom = inMode(assetFrom) ? assetFrom : replacement(DEFAULT_SELL, isPrivateSend ? undefined : assetTo)
+    const nextFrom = inMode(assetFrom) ? assetFrom : replacement(DEFAULT_SELL, assetTo)
     const keepTo = inMode(assetTo) && assetTo?.identifier !== nextFrom?.identifier
-    const nextTo = isPrivateSend ? nextFrom : keepTo ? assetTo : replacement(urlBuyAsset(assets)?.identifier ?? DEFAULT_BUY, nextFrom)
+    const nextTo = keepTo ? assetTo : replacement(urlBuyAsset(assets)?.identifier ?? DEFAULT_BUY, nextFrom)
 
     if (nextFrom && nextFrom !== assetFrom) setAssetFrom(nextFrom)
     if (nextTo && nextTo !== assetTo) setAssetTo(nextTo)
     // Also reruns on pair changes: a saved same-asset pair rehydrates after the first run.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [openNetworks, isPrivateTab, isPrivateSend, assets, pairKey])
+  }, [openNetworks, assets, pairKey])
 
   // The reverse direction pays out only where the payout can be checked: any other source gives way.
   useEffect(() => {
@@ -191,7 +187,7 @@ export const Swap = () => {
       <AutomaticOrders />
       {flowPreview && <BridgeFlowPreview stage={flowPreview} />}
 
-      {isHalted && !isPrivateTab && (
+      {isHalted && (
         <div className="pt-2">
           <SwapHaltBanner chains={haltedChains} />
         </div>

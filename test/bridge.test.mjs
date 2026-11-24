@@ -832,10 +832,10 @@ test('the chains decide the first leg: BCH seen at the bound address (0-conf) ma
   // Plain BCH: arrival finishes the operation.
   assert.equal(firstLegFromChain({ ...op, destinationAsset: 'BCH' }, { outbound: { kind: 'ok', outputs, total: '4873362', confirmations: 0 } }).stage, 'kept_bch')
 
-  // Already spent from the wallet before the swap: not offered for the PUSD swap.
-  const spent = firstLegFromChain(op, { outbound: { kind: 'ok', outputs: [{ ...outputs[0], unspent: false, confirmations: 1 }], total: '4873362', confirmations: 1 } })
+  // Already gone from the wallet's coins (spent, or not yet listed by the server): not offered for the PUSD swap. A coin
+  // missing from the list has no confirmations to report.
+  const spent = firstLegFromChain(op, { outbound: { kind: 'ok', outputs: [{ ...outputs[0], unspent: false, confirmations: 0 }], total: '4873362', confirmations: 0 } })
   assert.equal(spent.stage, 'bch_unconfirmed')
-  assert.match(spent.error, /already been spent/)
 
   // A reverted source transaction ends the operation; nothing reached THORChain.
   assert.equal(firstLegFromChain(op, { source: { confirmations: 2, failed: true } }).stage, 'failed')
@@ -873,6 +873,18 @@ test('a deposit memo must swap to the asked asset and pay the asked address with
   assert.throws(() => checkDepositMemo('=:BASE.USDC:0x000000000000000000000000000000000000dEaD:1', want), /different address/)
   assert.throws(() => checkDepositMemo('+:BASE.USDC:0x76ff6F88f58e083b88A80B1764ae7002e303D1A6', want), /not a swap/)
   assert.throws(() => checkDepositMemo(`=:BASE.USDC:0x76ff6F88f58e083b88A80B1764ae7002e303D1A6:${'1'.repeat(40)}`, want), /longer/)
+})
+
+test('a deposit memo may not set a limit below the minimum shown', async () => {
+  const { checkDepositMemo } = await import('../src/lib/thorchain-deposit.ts')
+  const want = { buyAsset: 'BASE.USDC-0X833589FCD6EDB6E08F4C7C32D4F71B54BDA02913', destination: '0x76ff6F88f58e083b88A80B1764ae7002e303D1A6', minOut: '2.61106164' }
+  const memo = limit => `=:BASE.USDC:0x76ff6F88f58e083b88A80B1764ae7002e303D1A6:${limit}`
+  assert.doesNotThrow(() => checkDepositMemo(memo('261106164'), want))
+  assert.doesNotThrow(() => checkDepositMemo(memo('260000000/1/0'), want), 'within the shown figure’s rounding')
+  assert.doesNotThrow(() => checkDepositMemo(memo('0/1/0'), want), 'no limit, as THORChain quotes a streaming swap')
+  assert.throws(() => checkDepositMemo(memo('250000000'), want), /less than the minimum shown/)
+  assert.throws(() => checkDepositMemo(memo('25e7/3/0'), want), /less than the minimum shown/)
+  assert.doesNotThrow(() => checkDepositMemo(memo('250000000'), { ...want, minOut: undefined }))
 })
 
 test('a deposit pays only THORChain’s current, open BCH vault', async () => {
@@ -1025,4 +1037,41 @@ test('price impact is the whole loss: slippage, or the value lost to fixed fees 
   assert.equal(resolvePriceImpact(quote('0.999', 19), usd(1), usd(1)).toSignificant(4), '0.19')
   assert.equal(resolvePriceImpact(quote('0.73', 19)).toSignificant(4), '0.19', 'without rates only slippage is known')
   assert.equal(resolvePriceImpact(quote('0.9', undefined), usd(1), usd(1)).toSignificant(4), '10')
+})
+
+test('a copied OUT: memo does not count as THORChain’s payment: only a spend of its vault’s coin does', async t => {
+  const { findThorchainOutbound } = await import('../src/lib/bch.ts')
+  const realWebSocket = globalThis.WebSocket
+  t.after(() => (globalThis.WebSocket = realWebSocket))
+  const vault = otherBinding.lockingBytecode
+  const stranger = `76a914${'22'.repeat(20)}88ac`
+  const memo = `OUT:${inboundHash}`
+  const opReturn = text => Uint8Array.from([0x6a, text.length, ...new TextEncoder().encode(text)])
+  const fundedBy = script => binToHex(encodeTransaction({ version: 2, locktime: 0, inputs: [{ outpointTransactionHash: hexToBin('11'.repeat(32)), outpointIndex: 0, sequenceNumber: 0, unlockingBytecode: Uint8Array.of(0) }], outputs: [{ lockingBytecode: hexToBin(script), valueSatoshis: 2_000_000n }] }))
+  const payout = prevHex => binToHex(encodeTransaction({ version: 2, locktime: 0, inputs: [{ outpointTransactionHash: hexToBin(txidOf(prevHex)), outpointIndex: 0, sequenceNumber: 0, unlockingBytecode: Uint8Array.of(0) }], outputs: [{ lockingBytecode: hexToBin(binding.lockingBytecode), valueSatoshis: 1_000_000n }, { lockingBytecode: opReturn(memo), valueSatoshis: 0n }] }))
+  const run = async payer => {
+    const prev = fundedBy(payer)
+    const paid = payout(prev)
+    const txs = { [txidOf(prev)]: prev, [txidOf(paid)]: paid }
+    const answers = {
+      'server.version': () => ['Fulcrum', '1.5'],
+      'blockchain.headers.subscribe': () => ({ height: 100 }),
+      'blockchain.scripthash.listunspent': () => [{ tx_hash: txidOf(paid), tx_pos: 0, value: 1_000_000, height: 0 }],
+      'blockchain.transaction.get': ([hash]) => txs[hash]
+    }
+    globalThis.WebSocket = class {
+      static OPEN = 1
+      readyState = 0
+      constructor() { queueMicrotask(() => { this.readyState = 1; this.onopen?.() }) }
+      send(data) {
+        const { id, method, params } = JSON.parse(data)
+        const result = answers[method]?.(params)
+        queueMicrotask(() => this.onmessage?.({ data: JSON.stringify(result === undefined ? { jsonrpc: '2.0', id, error: { code: 2, message: 'not found' } } : { jsonrpc: '2.0', id, result }) }))
+      }
+      close() { this.readyState = 3; this.onclose?.() }
+    }
+    return findThorchainOutbound(inboundHash, binding.lockingBytecode, 'OUT', [vault])
+  }
+  assert.equal((await run(vault)).kind, 'ok')
+  assert.equal((await run(stranger)).kind, 'not_found', 'the same memo and amount from anyone else')
 })

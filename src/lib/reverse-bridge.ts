@@ -242,7 +242,7 @@ export const prepareDeposit = async ({
   const route = pickRoute(routes)
   if (!route || !route.memo || !route.inboundAddress) throw new DepositError('THORChain has no route for this amount right now')
   if (!isBridgeRoute(route, { sellAsset: BridgeConfig.buyAsset, buyAsset, destinationAddress: destination })) throw new DepositError('The quote is not for this bridge')
-  checkDepositMemo(route.memo, { buyAsset, destination, shortCode })
+  checkDepositMemo(route.memo, { buyAsset, destination, shortCode, minOut: route.expectedBuyAmountMaxSlippage })
   const { vaultScript, router } = checkInbound(inbounds, route.inboundAddress, chain)
   const built = buildDeposit({ funding, lockingBytecode: binding.lockingBytecode, vaultScript, memo: route.memo, amountSats: amount, feeRate })
   return { built, route, router }

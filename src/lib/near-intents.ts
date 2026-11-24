@@ -30,7 +30,7 @@ const nearEndpoint = (): [string, Record<string, string>] =>
 export const NEAR_BCH = 'nep141:bch.omft.near'
 
 // The quote names this site as the venue (letters, digits and single - _ . only). No app fee is asked.
-const REFERRAL = 'cashbridge'
+export const REFERRAL = 'cashbridge'
 
 // The refund starts at the deadline, which "must exceed the time required for the deposit transaction to be mined. For
 // example, Bitcoin may require around one hour" (1Click): two hours going in, still inside a contract order's three.
@@ -377,13 +377,21 @@ const request = async <T,>(path: string, init?: { method?: 'GET' | 'POST'; body?
   return json as T
 }
 
-let tokens: Promise<OneClickToken[]> | undefined
+// The list carries prices, so it is read again after a few minutes; a failed read keeps serving the last list.
+const TOKENS_TTL_MS = 5 * 60_000
+let tokens: { at: number; list: Promise<OneClickToken[]> } | undefined
 export const getNearTokens = () => {
-  tokens ??= request<OneClickToken[]>('/tokens').catch(error => {
-    tokens = undefined
-    throw error
-  })
-  return tokens
+  if (!tokens || Date.now() - tokens.at > TOKENS_TTL_MS) {
+    const stale = tokens?.list
+    const list = request<OneClickToken[]>('/tokens').catch(error => {
+      // at 0: asked again on the next call.
+      tokens = stale && { at: 0, list: stale }
+      if (stale) return stale
+      throw error
+    })
+    tokens = { at: Date.now(), list }
+  }
+  return tokens.list
 }
 
 // The 1Click token for a THORChain-style identifier (`BASE.USDC-0X8335…`, `ETH.ETH`, `BCH.BCH`): same chain, and the
@@ -440,7 +448,7 @@ export interface NearQuoteRequest {
 }
 
 // Base units 1Click wants, from a decimal amount; extra precision is cut, never rounded up.
-const baseUnits = (amount: string, decimals: number) => {
+export const baseUnits = (amount: string, decimals: number) => {
   const [whole, fraction = ''] = amount.trim().split('.')
   return toBaseUnits(`${whole}.${fraction.slice(0, decimals) || '0'}`, decimals)
 }

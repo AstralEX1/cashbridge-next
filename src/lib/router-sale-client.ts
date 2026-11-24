@@ -110,7 +110,7 @@ const thorchainDeposit = async ({ bchOut, binding, buyAsset, shortCode, destinat
   const route = routes.find(r => r.providers[0] === ProviderName.THORCHAIN_STREAMING) ?? routes.find(r => r.providers[0] === ProviderName.THORCHAIN)
   if (!route?.memo || !route.inboundAddress) throw new DepositError('THORChain has no route for this amount right now')
   if (!isBridgeRoute(route, { sellAsset: BridgeConfig.buyAsset, buyAsset, destinationAddress: destination })) throw new DepositError('The quote is not for this bridge')
-  checkDepositMemo(route.memo, { buyAsset, destination, shortCode })
+  checkDepositMemo(route.memo, { buyAsset, destination, shortCode, minOut: route.expectedBuyAmountMaxSlippage })
   const { router } = checkInbound(inbounds, route.inboundAddress, destinationChainOf(buyAsset))
   return { sale: { memo: route.memo, vaultAddress: route.inboundAddress }, expectedOut: route.expectedBuyAmount, payoutRouter: router }
 }
