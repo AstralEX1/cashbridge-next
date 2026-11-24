@@ -15,7 +15,7 @@ import { NATIVE_BCH_TOKEN_ID, PayoutAmountRuleType, SpendableCoinType } from '@c
 import { InsufficientFunds } from '@cashlab/common/exceptions.js'
 import { sourceOutputToRelay } from '@wizardconnect/core/hdwalletv1-serialize'
 import { BridgeConfig } from '@/config'
-import { broadcastTransaction, checkOutpointsLive, decodeTx, normalizeTxid, RpcError, RpcTimeoutError, txidOf } from '@/lib/bch'
+import { broadcastTransaction, checkOutpointsLive, decodeTx, normalizeTxid, RpcError, txidOf } from '@/lib/bch'
 import { poolFeed, type PoolRecord } from '@/lib/cauldron-rostrum'
 
 // BCH <-> any fungible CashToken on Cauldron (PUSD by default): quotes and unsigned trade
@@ -317,10 +317,7 @@ export interface BuildResult {
   source_outputs: { value: string; locking_script_hex: string; token?: { category: string; amount: string } }[]
   inputs_to_sign: number[]
   expected_output: string
-  fee_sats: string
-  fee_token_amount: string
   miner_fee_sats: string
-  route: unknown
 }
 
 // The transaction for `intent`, selling up to `intent.sell`. A purchase is fitted to its funding: it
@@ -416,10 +413,7 @@ export const tradeTransaction = (trade: TradeResult, intent: BuildIntent): Build
     })),
     inputs_to_sign: ownIndexes,
     expected_output: trade.summary.demand.toString(),
-    fee_sats: '0',
-    fee_token_amount: '0',
-    miner_fee_sats: result.txfee.toString(),
-    route: { pools: trade.entries.length }
+    miner_fee_sats: result.txfee.toString()
   }
 }
 
@@ -800,5 +794,3 @@ export const broadcastBchTransaction = async (
   if (normalizeTxid(String(answer)) !== txid) throw new BroadcastUnknown('The BCH server reported a different transaction id')
   return txid
 }
-
-export { RpcTimeoutError }

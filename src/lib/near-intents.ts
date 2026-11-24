@@ -448,7 +448,7 @@ export interface NearQuoteRequest {
 }
 
 // Base units 1Click wants, from a decimal amount; extra precision is cut, never rounded up.
-const baseUnits = (amount: string, decimals: number) => {
+export const baseUnits = (amount: string, decimals: number) => {
   const [whole, fraction = ''] = amount.trim().split('.')
   return toBaseUnits(`${whole}.${fraction.slice(0, decimals) || '0'}`, decimals)
 }

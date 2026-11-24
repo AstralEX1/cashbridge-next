@@ -236,7 +236,7 @@ export const useSwapRates = () => {
   const assetFrom = useAssetFrom()
   const assetTo = useAssetTo()
   const identifiers = [assetFrom?.identifier, assetTo?.identifier].filter(Boolean).sort() as string[]
-  const { pricingQuote: quote } = useQuote()
+  const { quote } = useQuote()
   const { rates } = useRates(identifiers, quote?.providers[0])
   const houdiniRates = useMemo(() => (quote ? houdiniQuoteRates(quote) : {}), [quote])
   const isPrivate = isHoudiniProvider(quote?.providers[0])

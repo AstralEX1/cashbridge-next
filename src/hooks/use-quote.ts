@@ -42,8 +42,6 @@ type UseQuote = {
   // True when NEAR Intents or ShapeShift is quoted beside THORChain for this mode (drives the route compare UI).
   nearAllowed: boolean
   shapeshiftAllowed: boolean
-  // The quote to price the pair by: `quote`, or while it refetches, the previous one for the same pair.
-  pricingQuote?: QuoteResponseRoute
   error: Error | null
   // Set when the amount is under THORChain's minimum swap, in the sell asset's units.
   minimum?: string
@@ -232,7 +230,6 @@ export const useQuote = (): UseQuote => {
     gas: error ? {} : gas,
     nearAllowed,
     shapeshiftAllowed,
-    pricingQuote: error ? undefined : quote,
     error: saleError ?? newError,
     minimum: error instanceof BelowMinimumError ? error.minimum : undefined
   }

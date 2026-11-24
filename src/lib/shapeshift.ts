@@ -2,7 +2,7 @@ import { ProviderName } from '@tcswap/helpers'
 import type { QuoteResponseRoute } from '@tcswap/helpers/api'
 import { addressToLockingBytecode } from '@/lib/bch'
 import { formatBaseUnits, toBaseUnits } from '@/lib/bridge'
-import { getNearStatus, getNearTokens, NEAR_BCH, nearTokenFor, PLACEHOLDERS } from '@/lib/near-intents'
+import { baseUnits, getNearStatus, getNearTokens, NEAR_BCH, nearSlippageBps, nearTokenFor, PLACEHOLDERS } from '@/lib/near-intents'
 import { sameAddress } from '@/lib/payout-chains'
 import type { NearLeg } from '@/store/transaction-store'
 
@@ -146,15 +146,8 @@ const request = async <T,>(path: string, init?: { method?: 'GET' | 'POST'; body?
   return json as T
 }
 
-// The sell amount in base units; extra precision is cut, never rounded up.
-const sellUnits = (req: ShapeShiftRateRequest) => {
-  const [whole, fraction = ''] = req.sellAmount.trim().split('.')
-  return toBaseUnits(`${whole}.${fraction.slice(0, req.sellDecimals) || '0'}`, req.sellDecimals)
-}
-
-const slippageBps = (slippage?: number) => Math.round((slippage ?? 1) * 100)
 // Decimal fraction as ShapeShift takes it ("0.01" = 1%).
-const slippageDecimal = (slippage?: number) => (slippageBps(slippage) / 10_000).toString()
+const slippageDecimal = (slippage?: number) => (nearSlippageBps(slippage) / 10_000).toString()
 
 const ids = (req: ShapeShiftRateRequest) => {
   const sellAssetId = shapeShiftAssetId(req.sellAsset)
@@ -178,7 +171,7 @@ export const depositRates = (rates: unknown): RawRate[] =>
 export const getShapeShiftRates = async (req: ShapeShiftRateRequest, signal?: AbortSignal): Promise<RawRate[]> => {
   const pair = ids(req)
   if (!pair) return []
-  const query = new URLSearchParams({ ...pair, sellAmountCryptoBaseUnit: sellUnits(req).toString(), slippageTolerancePercentageDecimal: slippageDecimal(req.slippage) })
+  const query = new URLSearchParams({ ...pair, sellAmountCryptoBaseUnit: baseUnits(req.sellAmount, req.sellDecimals).toString(), slippageTolerancePercentageDecimal: slippageDecimal(req.slippage) })
   const { rates } = await request<{ rates: RawRate[] }>(`/v1/swap/rates?${query}`, { signal })
   return depositRates(rates)
 }
@@ -189,7 +182,7 @@ export const shapeShiftRoute = (
   answer: { swapper: string; sell: string; buy: string; seconds?: number; quoteId?: string; depositAddress?: string; expiresAt?: number }
 ): ShapeShiftRoute => {
   const buy = BigInt(answer.buy)
-  const min = (buy * BigInt(10_000 - slippageBps(req.slippage))) / 10_000n
+  const min = (buy * BigInt(10_000 - nearSlippageBps(req.slippage))) / 10_000n
   return {
     providers: [SHAPESHIFT_PROVIDER],
     sellAsset: req.sellAsset,
@@ -235,7 +228,7 @@ export const getShapeShiftQuote = async (req: ShapeShiftRateRequest & Partial<Pi
     const best = candidates[0]
     return best && shapeShiftRoute(req, { swapper: best.swapperName, sell: best.sellAmountCryptoBaseUnit, buy: best.buyAmountCryptoBaseUnit, seconds: seconds(best.estimatedExecutionTimeMs) })
   }
-  const sell = sellUnits(req).toString()
+  const sell = baseUnits(req.sellAmount, req.sellDecimals).toString()
   let failure: unknown
   for (const candidate of candidates.slice(0, MAX_SWAPPERS_TRIED)) {
     try {
