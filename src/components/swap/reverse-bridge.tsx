@@ -400,7 +400,10 @@ export const ReverseSwapButton = ({ onShowBridge }: { onShowBridge: () => void }
     // A pasted payout address stands in for the payout wallet, once it has passed its checks. Like the
     // forward form's pasted address, a refused one is reported before anything else.
     if (asset && payout.problem) {
-      const text = payout.problem === 'invalid' ? t('recipient.invalidAddress', { chain: chainLabel(asset.chain) }) : tReverse(payout.problem === 'unverified' ? 'payoutUnverified' : 'payoutUnsupported')
+      const text =
+        payout.problem === 'invalid'
+          ? t('recipient.invalidAddress', { chain: chainLabel(asset.chain) })
+          : tReverse(payout.problem === 'tag' ? 'exchangePickNetwork' : payout.problem === 'unverified' ? 'payoutUnverified' : 'payoutUnsupported')
       return { text, spinner: false, accent: false, onClick: payout.problem === 'unverified' ? payout.retry : undefined }
     }
     if (payout.checking) return { text: tReverse('checkingAddress'), spinner: true, accent: false }
