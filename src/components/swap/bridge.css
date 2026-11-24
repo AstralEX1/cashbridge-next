@@ -15,17 +15,6 @@
 }
 
 .bridge-widget {
-  /* Allbridge's elastic.out(1.2, 0.4), sampled for native CSS transitions. */
-  --bridge-select-ease: linear(
-    0, 0.27417, 0.54163, 0.78648, 0.99738, 1.16738, 1.2935, 1.37618,
-    1.41856, 1.42577, 1.40418, 1.36081, 1.30267, 1.23639, 1.16781, 1.10179,
-    1.04208, 0.9913, 0.95096, 0.92164, 0.90306, 0.89434, 0.89412, 0.90074,
-    0.91247, 0.92753, 0.94433, 0.96143, 0.97769, 0.99221, 1.00441, 1.01395,
-    1.02073, 1.02486, 1.02658, 1.02626, 1.02432, 1.02118, 1.0173, 1.01306,
-    1.0088, 1.00481, 1.00129, 0.99837, 0.99612, 0.99456, 0.99365, 0.99333,
-    0.9935, 0.99406, 0.99489, 0.99588, 0.99695, 0.99801, 0.99898, 0.99984,
-    1.00053, 1.00106, 1.00142, 1.00161, 1.00167, 1.0016, 1.00145, 1.00123, 1
-  );
   --modal: #f8fdff;
   --swap-bloc: #f8fdff;
   --blade: #dce6e8;
@@ -210,8 +199,8 @@
   opacity: var(--bridge-select-alpha);
   transform: scale(var(--bridge-select-scale));
   transition:
-    transform 0.8s var(--bridge-select-ease),
-    opacity 0.8s var(--bridge-select-ease);
+    transform 250ms var(--bridge-ease-out),
+    opacity 250ms var(--bridge-ease-out);
 }
 .bridge-asset-button:focus-visible,
 .bridge-asset-button:active {
