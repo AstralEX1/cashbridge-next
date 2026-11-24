@@ -45,11 +45,13 @@ import {
 } from '@/lib/cauldron'
 import { type CauldronToken, PUSD_TOKEN } from '@/lib/cauldron-tokens'
 import { generateId } from '@/lib/utils'
-import { bridgeName, formatAmount, formatMinutes, formatUsd, PUSD_LEG_SECONDS } from '@/lib/bridge-summary'
+import { bridgeName, formatAmount, formatMinutes, formatUsd, PUSD_LEG_SECONDS, timeOf, usdText } from '@/lib/bridge-summary'
 import { isDollarStable } from '@/lib/dollar-stable'
 import { useSwapStore } from '@/store/swap-store'
 import {
   type BridgeOperation,
+  type BridgeStage,
+  freshOperation,
   type SecondLeg,
   type SwapTransaction,
   transactionStore,
@@ -78,14 +80,7 @@ const POLL_MS = 8_000
 import { withLock } from '@/lib/bridge-first-leg'
 import { ReverseOperationPanel, SignHint, type SignPhase } from '@/components/swap/reverse-bridge'
 import { nearDeposits, syncBridge } from '@/lib/bridge-sync'
-import { SignCancelled, SignDeclined, signInWallet, SignSessionLost, SignTimedOut, SignUndelivered } from '@/lib/bch-signing'
-
-// The persisted operation as every tab sees it right now (another tab may have moved it on).
-const freshOperation = async (uid: string) => {
-  await transactionStore.persist.rehydrate()
-  const tx = transactionStore.getState().transactions.find(t => t.uid === uid)
-  return tx && tx.kind !== 'send' && tx.bridge ? (tx as BridgeTx) : undefined
-}
+import { signingNoteKey, signInWallet } from '@/lib/bch-signing'
 
 // --- Combined estimate -------------------------------------------------------------------------
 
@@ -197,8 +192,10 @@ const BridgeSync = ({ tx }: { tx: BridgeTx }) => {
 
 // --- Operation panel ---------------------------------------------------------------------------
 
-export const timeOf = (ms: number) => new Date(ms).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
-export const usdText = (value?: number) => (value === undefined || !Number.isFinite(value) ? undefined : formatUsd(value))
+// The stages after the first leg's BCH reached the wallet, up to the token swap's end.
+const BCH_DELIVERED: BridgeStage[] = ['bch_ready', 'second_leg_signing', 'second_leg_signed', 'second_leg_unknown', 'second_leg_pending', 'completed']
+const firstLegDone = (op: BridgeOperation) => BCH_DELIVERED.includes(op.stage) || op.stage === 'kept_bch' || (isBridgeTerminal(op) && !!op.received?.length)
+
 
 export interface FlowToken {
   amount: string
@@ -682,8 +679,7 @@ function BackgroundBridgeToasts({ openUid }: { openUid?: string }) {
       }
     } else {
       const firstDone =
-        ['bch_ready', 'second_leg_signing', 'second_leg_signed', 'second_leg_unknown', 'second_leg_pending', 'completed', 'kept_bch'].includes(op.stage) ||
-        (isBridgeTerminal(op) && !!op.received?.length)
+firstLegDone(op)
       const sendConfirmed = (op.firstLeg.sourceConfirmations ?? 0) > 0 || firstDone
       if (tx.hash) {
         items.push({
@@ -762,16 +758,14 @@ const ForwardOperationPanel = ({ uid, onClose }: { uid?: string; onClose: () => 
   const pusdEstimate = useTokenQuoteFor(token && bchSats !== undefined && !op?.secondLeg ? formatBch(bchSats) : undefined, token ?? null)
   const { rates } = useRates(bridgeTx ? [bridgeTx.assetFrom.identifier, 'BCH.BCH'].sort() : [])
   const collapsedNow =
-    !!op && hasToken && ['bch_ready', 'second_leg_signing', 'second_leg_signed', 'second_leg_unknown', 'second_leg_pending', 'completed'].includes(op.stage)
+    !!op && hasToken && BCH_DELIVERED.includes(op.stage)
   const animateCollapse = useCollapseOnce(bridgeTx?.uid, collapsedNow)
 
   if (!bridgeTx || !op) return null
   const active = bridgeTx
   const terminal = isBridgeTerminal(op)
   const completed = op.stage === 'completed' || (op.stage === 'kept_bch' && !!op.received?.length && !op.error)
-  const firstDone =
-    ['bch_ready', 'second_leg_signing', 'second_leg_signed', 'second_leg_unknown', 'second_leg_pending', 'completed', 'kept_bch'].includes(op.stage) ||
-    (terminal && !!op.received?.length)
+  const firstDone = firstLegDone(op)
   const secondStarted = ['second_leg_signed', 'second_leg_unknown', 'second_leg_pending'].includes(op.stage)
   const ready = (op.stage === 'bch_ready' || op.stage === 'second_leg_signing') && hasToken
   const stage: FlowStage = completed
@@ -1274,11 +1268,8 @@ const useSecondLeg = (tx: BridgeTx) => {
         retry = signingDefinitelyStopped(e)
         return retry ? { stage: 'bch_ready', secondLeg: undefined } : { stage: 'second_leg_unknown', error: OPEN_SECOND_REQUEST_NOTE }
       })
-      if (e instanceof SignCancelled) setNote(t('reverse.signCancelled'))
-      else if (e instanceof SignDeclined) setNote(t('reverse.signDeclined', { wallet: walletName }))
-      else if (e instanceof SignTimedOut) setNote(t('reverse.signTimedOut', { wallet: walletName }))
-      else if (e instanceof SignSessionLost) setNote(t('reverse.signSessionLost', { wallet: walletName }))
-      else if (e instanceof SignUndelivered) setNote(t('reverse.signUndelivered', { wallet: walletName }))
+      const noteKey = signingNoteKey(e)
+      if (noteKey) setNote(t(`reverse.${noteKey}`, { wallet: walletName }))
       else setError(e instanceof Error ? e.message : t('second.failed'))
       setReview(undefined)
     } finally {

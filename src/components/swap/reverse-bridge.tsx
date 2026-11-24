@@ -41,10 +41,10 @@ import { withLock } from '@/lib/bridge-first-leg'
 import { bridgeCompletionTransactions } from '@/lib/bridge-completion'
 import { hasSecondAuthorization, OPEN_SECOND_REQUEST_NOTE, recoverSecondSigning, rememberAttempt, sameSecondAttempt, signingDefinitelyStopped, signingRequest } from '@/lib/bridge-signing-recovery'
 import { formatStepTime, stepTime } from '@/lib/bridge-tracking'
-import { bridgeName, formatAmount, formatMinutes, formatPercent, formatUsd, PUSD_LEG_SECONDS, valueImpact } from '@/lib/bridge-summary'
+import { bridgeName, formatAmount, formatMinutes, formatPercent, formatUsd, PUSD_LEG_SECONDS, timeOf, usdText, valueImpact } from '@/lib/bridge-summary'
 import { isDollarStable } from '@/lib/dollar-stable'
 import { type ReviewedSwap } from '@/lib/cauldron'
-import { SignCancelled, SignDeclined, SignSessionLost, SignTimedOut, SignUndelivered } from '@/lib/bch-signing'
+import { SignCancelled, SignTimedOut, signingNoteKey } from '@/lib/bch-signing'
 import { type CauldronToken, PUSD_TOKEN } from '@/lib/cauldron-tokens'
 import { readableError } from '@/lib/errors'
 import {
@@ -79,6 +79,7 @@ import { generateId } from '@/lib/utils'
 import { useSwapStore } from '@/store/swap-store'
 import {
   type BridgeOperation,
+  freshOperation,
   getActiveBridge,
   isBridgeTerminal,
   isBridgeWaiting,
@@ -100,13 +101,6 @@ type Update = ReturnType<typeof useUpdateBridge>
 const formatBch = (sats: bigint | string) => formatBaseUnits(sats, 8)
 const OPEN_REQUEST_NOTE = `Your BCH wallet still has this request: reject it there. If it is approved, the wallet may send it; this transfer waits up to ${Math.ceil(OPEN_REQUEST_MS / 60_000)} minutes to see.`
 const toNumber = (value?: USwapNumber) => (value ? Number(value.toSignificant(12)) : undefined)
-const usdText = (value?: number) => (value === undefined || !Number.isFinite(value) ? undefined : formatUsd(value))
-
-const freshOperation = async (uid: string) => {
-  await transactionStore.persist.rehydrate()
-  const tx = transactionStore.getState().transactions.find(t => t.uid === uid)
-  return tx && tx.kind !== 'send' && tx.bridge ? (tx as BridgeTx) : undefined
-}
 
 // Signs a prepared deposit for the operation `uid` and broadcasts it.
 const sendDeposit = async (uid: string, prepared: PreparedDeposit, update: Update, wallet: ReturnType<typeof useBchWallet>, signal?: AbortSignal, attempt = generateId()) => {
@@ -601,11 +595,7 @@ export const ReverseConfirmDialog = ({ isOpen, onOpenChange, onShowBridge }: { i
         // Another operation still needs this wallet: show it instead of a dead end.
         onOpenChange(false)
         onShowBridge?.()
-      } else if (error instanceof SignCancelled) setNote(tReverse('signCancelled'))
-      else if (error instanceof SignDeclined) setNote(tReverse('signDeclined', { wallet: walletName }))
-      else if (error instanceof SignTimedOut) setNote(tReverse('signTimedOut', { wallet: walletName }))
-      else if (error instanceof SignSessionLost) setNote(tReverse('signSessionLost', { wallet: walletName }))
-      else if (error instanceof SignUndelivered) setNote(tReverse('signUndelivered', { wallet: walletName }))
+      } else if (signingNoteKey(error)) setNote(tReverse(signingNoteKey(error)!, { wallet: walletName }))
       else {
         console.warn('Reverse bridge failed to start', error)
         setNote(error instanceof ReverseBlocked ? error.message : readableError(error, tSwap('toast.errorSubmitting')))
@@ -794,8 +784,6 @@ export const ReverseConfirmDialog = ({ isOpen, onOpenChange, onShowBridge }: { i
 
 // --- Progress screen -----------------------------------------------------------------------------
 
-const timeOf = (ms: number) => new Date(ms).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
-
 // Step 2 of a token operation, ready to sign: the deposit freshly quoted and built on the BCH the
 // sale paid, its figures shown, then signed in the BCH wallet.
 const useDepositStep = (tx: BridgeTx) => {
@@ -870,11 +858,8 @@ const useDepositStep = (tx: BridgeTx) => {
         retry = signingDefinitelyStopped(e)
         return retry ? { stage: 'bch_ready', reverse: { ...reverse, deposit: undefined } } : { stage: 'second_leg_unknown', error: OPEN_SECOND_REQUEST_NOTE }
       })
-      if (e instanceof SignCancelled) setNote(t('reverse.signCancelled'))
-      else if (e instanceof SignDeclined) setNote(t('reverse.signDeclined', { wallet: walletName }))
-      else if (e instanceof SignTimedOut) setNote(t('reverse.signTimedOut', { wallet: walletName }))
-      else if (e instanceof SignSessionLost) setNote(t('reverse.signSessionLost', { wallet: walletName }))
-      else if (e instanceof SignUndelivered) setNote(t('reverse.signUndelivered', { wallet: walletName }))
+      const noteKey = signingNoteKey(e)
+      if (noteKey) setNote(t(`reverse.${noteKey}`, { wallet: walletName }))
       else setError(readableError(e, t('reverse.prepareFailed')))
       if (retry) await prepared.refetch()
     } finally {

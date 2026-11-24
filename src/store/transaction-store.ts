@@ -436,6 +436,12 @@ export const useSetTransactionStatus = () => transactionStore(state => state.set
 export const useUpdateBridge = () => transactionStore(state => state.updateBridge)
 
 export type BridgeRecord = SwapTransaction & { bridge: BridgeOperation }
+// The persisted operation as every tab sees it right now (another tab may have moved it on).
+export const freshOperation = async (uid: string) => {
+  await transactionStore.persist.rehydrate()
+  const tx = transactionStore.getState().transactions.find(t => t.uid === uid)
+  return tx && tx.kind !== 'send' && tx.bridge ? (tx as BridgeRecord) : undefined
+}
 const isUnfinishedBridge = (tx: Transaction): tx is BridgeRecord => tx.kind !== 'send' && !!tx.bridge && !isBridgeTerminal(tx.bridge)
 // One operation at a time per browser needs the user: the newest unfinished one that is not just
 // waiting on the network. Waiting ones run on in the background (isBridgeWaiting).
