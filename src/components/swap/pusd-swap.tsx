@@ -537,35 +537,30 @@ export const CauldronQuoteBlock = ({ quote }: { quote: CauldronQuoteView }) => {
   )
 }
 
-// Figures of a Cauldron trade for display. `side` 'buy' sells BCH for the token (minOutput in token
-// units); 'sell' sells the token for BCH (minOutput in sats). The pools' fee is always in BCH.
-export const cauldronQuoteView = (
-  leg: { side?: 'buy' | 'sell'; sell: bigint; output: bigint; spotOutput: number; tradeFeeSats: bigint; minerFeeSats?: bigint; minOutput: bigint },
+// Figures of a Cauldron buy (BCH for the token, minOutput in token units) for display. The pools' fee is in BCH.
+const cauldronQuoteView = (
+  leg: { sell: bigint; output: bigint; spotOutput: number; tradeFeeSats: bigint; minerFeeSats?: bigint; minOutput: bigint },
   token: Pick<CauldronToken, 'ticker' | 'decimals'>,
   bchUsd?: number
 ): CauldronQuoteView | undefined => {
   if (leg.output <= 0n || leg.sell <= 0n) return undefined
-  const selling = leg.side === 'sell'
-  const bch = Number(selling ? leg.output : leg.sell) / 1e8
-  const tokens = tokenAmount(selling ? leg.sell : leg.output, token)
+  const bch = Number(leg.sell) / 1e8
+  const tokens = tokenAmount(leg.output, token)
   const fee = Number(leg.tradeFeeSats) / 1e8
   const miner = leg.minerFeeSats === undefined ? 0 : Number(leg.minerFeeSats) / 1e8
   const bchPerToken = bch / tokens
   // The trade's own output against what the same sale buys at spot after the fee.
-  const spot = selling ? leg.spotOutput / 1e8 : leg.spotOutput / 10 ** token.decimals
-  const output = selling ? bch : tokens
-  const feeShare = selling ? fee / (bch + fee) : fee / bch
-  const afterFee = spot * (1 - feeShare)
+  const afterFee = (leg.spotOutput / 10 ** token.decimals) * (1 - fee / bch)
   return {
     ticker: token.ticker,
     bchPerToken,
     tokenUsd: isDollarStable(token.ticker) ? 1 : bchUsd ? bchPerToken * bchUsd : undefined,
-    lpFeePercent: feeShare * 100,
+    lpFeePercent: (fee / bch) * 100,
     lpFeeUsd: bchUsd ? fee * bchUsd : undefined,
     networkFeeBch: miner,
     networkFeeUsd: bchUsd ? miner * bchUsd : undefined,
-    priceImpactPercent: afterFee > 0 ? Math.max(0, (1 - output / afterFee) * 100) : 0,
-    minimum: selling ? `${formatBch(leg.minOutput)} BCH` : `${formatToken(leg.minOutput, token)} ${token.ticker}`
+    priceImpactPercent: afterFee > 0 ? Math.max(0, (1 - tokens / afterFee) * 100) : 0,
+    minimum: `${formatToken(leg.minOutput, token)} ${token.ticker}`
   }
 }
 
