@@ -2,7 +2,7 @@
 // Run: npm run test:bridge
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
-import { exchangeChain, paymentRequest, watchExchangeDeposit } from '../src/lib/exchange-deposit.ts'
+import { exchangeChain, exchangePayoutBlocked, internalPayout, paymentRequest, watchExchangeDeposit } from '../src/lib/exchange-deposit.ts'
 
 const DEPOSIT = '0x1f2E3d4C5b6A79881726354453627181920a0B0c'
 
@@ -10,6 +10,17 @@ test('exchange deposits only on chains 1Click takes plainly and this app reads b
   for (const chain of ['BASE', 'ETH', 'ARB', 'BSC', 'POL', 'SOL', 'TRON', 'BTC', 'LTC', 'DOGE']) assert.equal(exchangeChain(chain), true, chain)
   // BCH is the other side; XRP needs a memo 1Click does not map here; TON/Sui/Cardano deposits are not read back here.
   for (const chain of ['BCH', 'XRP', 'TON', 'SUI', 'ADA', 'GAIA', undefined]) assert.equal(exchangeChain(chain), false, String(chain))
+})
+
+test('an exchange payout is refused where the exchange needs a memo or tag the bridge cannot send', () => {
+  for (const chain of ['XRP', 'GAIA', 'THOR']) assert.equal(exchangePayoutBlocked(chain), true, chain)
+  for (const chain of ['ETH', 'BASE', 'SOL', 'TRON', 'BTC', 'LTC', 'DOGE', 'ZEC', undefined]) assert.equal(exchangePayoutBlocked(chain), false, String(chain))
+})
+
+test('native EVM coins are flagged as paid by a contract, tokens and other chains are not', () => {
+  for (const asset of ['ETH.ETH', 'BASE.ETH', 'AVAX.AVAX', 'BSC.BNB']) assert.equal(internalPayout(asset), true, asset)
+  for (const asset of ['ETH.USDC-0XA0B86991C6218B36C1D19D4A2E9EB0CE3606EB48', 'BASE.USDC-0X833589FCD6EDB6E08F4C7C32D4F71B54BDA02913', 'BTC.BTC', 'SOL.SOL', 'TRON.TRX'])
+    assert.equal(internalPayout(asset), false, asset)
 })
 
 test('payment requests fill in coin, network and amount', () => {

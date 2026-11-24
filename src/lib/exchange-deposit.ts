@@ -18,6 +18,18 @@ const contractOf = (asset: string) => {
 }
 const BIP21: Record<string, string> = { [Chain.Bitcoin]: 'bitcoin', [Chain.Litecoin]: 'litecoin', [Chain.Dogecoin]: 'dogecoin' }
 
+// Paying out to an exchange: on these chains an exchange credits its shared deposit address by the memo or destination
+// tag sent with it, and neither route sends one with a payout. THORChain's swap memo names only the destination address
+// (it writes OUT:<hash> on the payout itself), and 1Click has no payout memo field ("Classic addresses with destination
+// tags are NOT supported"). So an exchange address there is refused rather than paid.
+const PAYOUT_TAG_CHAINS: string[] = [Chain.Ripple, Chain.Cosmos, Chain.THORChain]
+export const exchangePayoutBlocked = (chain?: string) => !!chain && PAYOUT_TAG_CHAINS.includes(chain)
+
+// A native coin on an EVM chain is paid by a contract: THORChain's router sends it with `to.send`, and 1Click paid OP ETH
+// through a bridge contract call. Both are internal transfers, which some exchanges do not credit. Tokens arrive as plain
+// ERC-20 transfers.
+export const internalPayout = (asset: string) => isEvmChain(asset.split('.')[0].toUpperCase()) && !contractOf(asset)
+
 // A payment request with coin, network and amount filled in, for a wallet app that reads one: EIP-681 on EVM chains
 // (amount in base units), Solana Pay, BIP 21; the bare address elsewhere.
 export const paymentRequest = (asset: string, deposit: string, units: bigint, decimals: number) => {
