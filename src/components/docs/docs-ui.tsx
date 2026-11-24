@@ -7,6 +7,7 @@ const SHOTS = {
   'connect-bch': [980, 520],
   'connect-evm': [980, 1390],
   'connect-wizardconnect': [840, 1120],
+  'exchange-deposit': [1200, 1578],
   'form-forward': [1140, 1130],
   'form-reverse': [1140, 1430],
   'picker-from': [1140, 1050],

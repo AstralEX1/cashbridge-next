@@ -127,6 +127,36 @@ export default function Page() {
         </Step>
       </Steps>
 
+      <h2 id="from-an-exchange">Pay from an exchange</h2>
+      <p>
+        No wallet on the other chain? With the Cashbridge Router on, pick <strong>Send from an exchange</strong> under the main button. It goes through NEAR Intents, whose
+        deposit address takes a plain withdrawal; THORChain needs a memo or a router call, which an exchange cannot send. After the deposit it is an ordinary Router order: the
+        BCH lands in your order contract and the token is bought for you, with the tab closed too.
+      </p>
+      <Steps>
+        <Step title="Give a refund address">
+          <p>
+            A wallet you own on the source chain. If the swap cannot run, NEAR Intents sends the coins back there. An exchange deposit address may not credit such a refund.
+          </p>
+        </Step>
+        <Step title="Withdraw to the deposit address">
+          <p>
+            Scan the QR code (coin, network and amount filled in; <strong>Address only</strong> for exchange apps that read just the address) or copy the amount and address.
+            Withdraw on the network shown. The exchange&apos;s fee comes on top: at least <strong>Min</strong> must arrive, and more is swapped too.
+          </p>
+          <Shot name="exchange-deposit" alt="The deposit card: QR code, network, minimum, refund address, amount and deposit address with copy buttons" caption="The page waits for the withdrawal and reads it on its own chain." />
+        </Step>
+        <Step title="Let it run">
+          <p>
+            Once the deposit shows up, the order runs like any other. The row under the form keeps the QR code until the deposit window closes.
+          </p>
+        </Step>
+      </Steps>
+      <Callout kind="warning" title="Less than Min, or too late">
+        NEAR Intents counts what arrives until the deadline (about two hours after you get the address). A total under <strong>Min</strong> goes back to your refund address then.
+        Do not send to an expired address.
+      </Callout>
+
       <h2 id="states">States of an automatic transfer</h2>
       <table>
         <thead>
@@ -136,6 +166,10 @@ export default function Page() {
           </tr>
         </thead>
         <tbody>
+          <tr>
+            <td>Waiting for your deposit</td>
+            <td>Paid from an exchange: the deposit address waits for your withdrawal.</td>
+          </tr>
           <tr>
             <td>Waiting for BCH</td>
             <td>Your source transfer is in flight. The bridge has not paid BCH to the order yet.</td>
