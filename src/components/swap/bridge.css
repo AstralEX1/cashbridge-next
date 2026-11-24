@@ -133,7 +133,8 @@
   transition:
     background-color 0.25s,
     color 0.25s,
-    box-shadow 0.25s;
+    box-shadow 0.25s,
+    scale 160ms var(--bridge-ease-out);
 }
 .bridge-pill:hover {
   background: #dce8e4;
@@ -307,6 +308,7 @@
   pointer-events: none;
 }
 .bridge-preset {
+  position: relative;
   height: 26px;
   padding: 0 10px;
   border: 1px solid #0f182010;
@@ -381,11 +383,13 @@
   border-radius: 50%;
   background: transparent;
   color: inherit;
+  position: relative;
   cursor: pointer;
   transition:
     border-color 0.15s ease,
     color 0.15s ease,
-    transform 0.25s ease;
+    transform 0.25s var(--bridge-ease-out),
+    scale 160ms var(--bridge-ease-out);
 }
 .bridge-direction:disabled {
   cursor: default;
@@ -607,7 +611,8 @@
   transition:
     background-color 200ms ease,
     border-color 200ms ease,
-    margin-left 280ms cubic-bezier(0.22, 1, 0.36, 1);
+    margin-left 280ms cubic-bezier(0.22, 1, 0.36, 1),
+    scale 160ms var(--bridge-ease-out);
 }
 .bridge-wallet-actions {
   display: grid;
@@ -2054,7 +2059,7 @@ button.bridge-flow-primary:disabled {
 /* Automatic execution shares the form and receipt, with its own order lifecycle. */
 /* Cashbridge Router: a two-option selector, Manual | Cashbridge Router; the chosen option is the green pill. */
 .bridge-router { display: inline-flex; padding: 3px; border-radius: 999px; background: #ffffff0d; box-shadow: inset 0 0 0 1px #ffffff1a; }
-.bridge-router button { padding: 7px 14px; border-radius: 999px; color: #dce6e8; font-size: 14px; font-weight: 600; white-space: nowrap; cursor: pointer; }
+.bridge-router button { position: relative; padding: 7px 14px; border-radius: 999px; color: #dce6e8; font-size: 14px; font-weight: 600; white-space: nowrap; cursor: pointer; transition: scale 160ms var(--bridge-ease-out); }
 .bridge-router button[aria-pressed='true'] { background: #0ac18e; color: #0f1820; }
 .bridge-router button:disabled { cursor: default; pointer-events: none; }
 .bridge-router[data-disabled] button:disabled { opacity: .5; }
@@ -2135,7 +2140,7 @@ button.bridge-flow-primary:disabled {
 @media (hover: hover) and (pointer: fine) { .bridge-auto-card:hover { border-color: #0ac18e66; } }
 @media (prefers-reduced-motion: reduce) { .bridge-auto-card { transition: none; } .bridge-auto-card:active { transform: none; } }
 
-/* Refresh in the tools row, a white square like Settings: a ring around the icon fills up until the
+/* Refresh in the tools row, a white circle like Settings: a ring around the icon fills up until the
    quote and balances reload on their own. */
 .bridge-refresh {
   position: relative;
@@ -2146,10 +2151,11 @@ button.bridge-flow-primary:disabled {
   place-items: center;
   padding: 0;
   border: 0;
-  border-radius: 10px;
+  border-radius: 999px;
   background: var(--btn-style-1-bg);
   color: #0f1820;
   cursor: pointer;
+  transition: scale 160ms var(--bridge-ease-out);
 }
 .bridge-refresh:hover {
   background: var(--btn-small-hover);
@@ -2417,3 +2423,34 @@ button.bridge-flow-primary:disabled {
 .bridge-exchange-status { display: flex; width: 100%; align-items: center; gap: 8px; margin: 0; color: #415257; font-size: 14px; font-weight: 600; }
 .bridge-exchange-status.is-warning { display: block; color: #9a5b0b; font-weight: 500; line-height: 1.45; }
 .bridge-exchange-time { margin-left: auto; font-variant-numeric: tabular-nums; }
+
+/* Press feedback: controls dip on press and ease back on release. The separate scale property adds to any
+   transform an element already animates (token pills, chips, the direction button's turn). */
+:is(.bridge-pill:not(.bridge-asset-button), .bridge-direction, .bridge-router button, .bridge-refresh, .bridge-wallet-connect, .bridge-preset):active:not(:disabled, [aria-disabled='true']) {
+  scale: 0.97;
+}
+/* Touch targets of about 44 px around small controls, without changing how they look. Chips only grow
+   up and down: they sit 4 px apart, so wider areas would overlap. */
+:is(.bridge-direction, .bridge-refresh, .bridge-router button, .bridge-preset)::after {
+  content: '';
+  position: absolute;
+  inset: -4px;
+}
+.bridge-router button::after {
+  inset: -7px 0;
+}
+.bridge-preset::after {
+  inset: -9px 0;
+}
+/* Touch screens show the wallet's copy / explorer / disconnect icons all the time: taller targets,
+   no wider than the 7 px gap allows. */
+@media (hover: none) {
+  .bridge-wallet-actions-inner {
+    overflow: visible;
+  }
+  .bridge-wallet-actions button,
+  .bridge-wallet-actions a {
+    margin: -12px -3px;
+    padding: 13px 4px;
+  }
+}

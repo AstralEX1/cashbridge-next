@@ -4,7 +4,7 @@ import { cva, type VariantProps } from 'class-variance-authority'
 import { cn } from '@/lib/utils'
 
 const animatedButtonVariants = cva(
-  'inline-flex items-center justify-center gap-1.5 rounded-15 px-5 py-[26px] text-xl leading-[1.2] font-medium whitespace-nowrap shrink-0 cursor-pointer outline-none transition-[background-color,color,box-shadow] duration-[250ms] disabled:bg-btn-animated-inactive disabled:text-txt-btn-animated-inactive disabled:pointer-events-none [&_svg]:pointer-events-none [&_svg]:shrink-0',
+  'inline-flex items-center justify-center gap-1.5 rounded-15 px-5 py-[26px] text-xl leading-[1.2] font-medium whitespace-nowrap shrink-0 cursor-pointer outline-none transition-[background-color,color,box-shadow,scale] duration-[250ms] active:scale-[0.97] disabled:bg-btn-animated-inactive disabled:text-txt-btn-animated-inactive disabled:pointer-events-none [&_svg]:pointer-events-none [&_svg]:shrink-0',
   {
     variants: {
       colorType: {
