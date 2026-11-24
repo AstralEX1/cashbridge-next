@@ -377,13 +377,21 @@ const request = async <T,>(path: string, init?: { method?: 'GET' | 'POST'; body?
   return json as T
 }
 
-let tokens: Promise<OneClickToken[]> | undefined
+// The list carries prices, so it is read again after a few minutes; a failed read keeps serving the last list.
+const TOKENS_TTL_MS = 5 * 60_000
+let tokens: { at: number; list: Promise<OneClickToken[]> } | undefined
 export const getNearTokens = () => {
-  tokens ??= request<OneClickToken[]>('/tokens').catch(error => {
-    tokens = undefined
-    throw error
-  })
-  return tokens
+  if (!tokens || Date.now() - tokens.at > TOKENS_TTL_MS) {
+    const stale = tokens?.list
+    const list = request<OneClickToken[]>('/tokens').catch(error => {
+      // at 0: asked again on the next call.
+      tokens = stale && { at: 0, list: stale }
+      if (stale) return stale
+      throw error
+    })
+    tokens = { at: Date.now(), list }
+  }
+  return tokens.list
 }
 
 // The 1Click token for a THORChain-style identifier (`BASE.USDC-0X8335…`, `ETH.ETH`, `BCH.BCH`): same chain, and the
