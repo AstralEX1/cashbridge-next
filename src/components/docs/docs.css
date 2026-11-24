@@ -38,8 +38,10 @@
   font-weight: 600;
   transition: color 150ms;
 }
-.docs-repo:hover {
-  color: var(--docs-text);
+@media (hover: hover) and (pointer: fine) {
+  .docs-repo:hover {
+    color: var(--docs-text);
+  }
 }
 .docs-launch {
   padding: 9px 18px;
@@ -50,8 +52,10 @@
   font-weight: 600;
   transition: background-color 150ms;
 }
-.docs-launch:hover {
-  background: #09ad7f;
+@media (hover: hover) and (pointer: fine) {
+  .docs-launch:hover {
+    background: #09ad7f;
+  }
 }
 
 .docs-body {
@@ -94,9 +98,11 @@
   line-height: 1.35;
   transition: background-color 150ms, color 150ms;
 }
-.docs-nav-section a:hover {
-  background: var(--docs-panel);
-  color: var(--docs-text);
+@media (hover: hover) and (pointer: fine) {
+  .docs-nav-section a:hover {
+    background: var(--docs-panel);
+    color: var(--docs-text);
+  }
 }
 .docs-nav-section a[aria-current='page'] {
   background: #0ac18e24;
@@ -414,9 +420,11 @@
   line-height: 1.35;
   transition: border-color 150ms, background-color 150ms;
 }
-.docs-pager a:hover {
-  border-color: #0ac18e66;
-  background: #0ac18e14;
+@media (hover: hover) and (pointer: fine) {
+  .docs-pager a:hover {
+    border-color: #0ac18e66;
+    background: #0ac18e14;
+  }
 }
 .docs-pager a span {
   color: var(--docs-muted);
@@ -2256,8 +2264,10 @@
   text-decoration: none;
   transition: border-color 150ms;
 }
-.docs-article .hw-blocks a:hover {
-  border-color: #0ac18e80;
+@media (hover: hover) and (pointer: fine) {
+  .docs-article .hw-blocks a:hover {
+    border-color: #0ac18e80;
+  }
 }
 .hw-blocks img {
   grid-row: 1 / 3;

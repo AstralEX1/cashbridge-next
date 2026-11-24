@@ -77,8 +77,10 @@
   background: var(--menu);
   color: var(--leah);
 }
-.bridge-tools [data-slot='button']:hover {
-  background: var(--label-menu-hover);
+@media (hover: hover) and (pointer: fine) {
+  .bridge-tools [data-slot='button']:hover {
+    background: var(--label-menu-hover);
+  }
 }
 .bridge-card {
   padding: 24px;
@@ -136,8 +138,10 @@
     box-shadow 0.25s,
     scale 160ms var(--bridge-ease-out);
 }
-.bridge-pill:hover {
-  background: #dce8e4;
+@media (hover: hover) and (pointer: fine) {
+  .bridge-pill:hover {
+    background: #dce8e4;
+  }
 }
 .bridge-pill[aria-pressed='true'] {
   background: #0f1820;
@@ -276,8 +280,10 @@
   font-size: 13px;
   cursor: pointer;
 }
-.bridge-max-balance:hover {
-  color: #0b9b73;
+@media (hover: hover) and (pointer: fine) {
+  .bridge-max-balance:hover {
+    color: #0b9b73;
+  }
 }
 .bridge-max-balance:focus-visible {
   border-radius: 6px;
@@ -337,9 +343,11 @@
   opacity: 0;
   transform: translateY(2px) scale(0.96);
 }
-.bridge-preset:hover {
-  background: #0f18201a;
-  color: #0f1820;
+@media (hover: hover) and (pointer: fine) {
+  .bridge-preset:hover {
+    background: #0f18201a;
+    color: #0f1820;
+  }
 }
 .bridge-preset:active {
   background: #0ac18e29;
@@ -517,9 +525,11 @@
   background: #ffffff0d;
   color: #d2dee2;
 }
-.bridge-page .bridge-tools [data-slot='button']:hover {
-  background: #ffffff1a;
-  color: #f8fdff;
+@media (hover: hover) and (pointer: fine) {
+  .bridge-page .bridge-tools [data-slot='button']:hover {
+    background: #ffffff1a;
+    color: #f8fdff;
+  }
 }
 .bridge-page .bridge-wallet {
   color: #a9bbc2;
@@ -567,9 +577,13 @@
 .bridge-input-heading > .bridge-wallet-badge {
   margin-left: calc(var(--wallet-actions, -6px) + 6px);
 }
-.bridge-input-heading > .bridge-wallet-badge:hover,
 .bridge-input-heading > .bridge-wallet-badge:focus-within {
   margin-left: 0;
+}
+@media (hover: hover) and (pointer: fine) {
+  .bridge-input-heading > .bridge-wallet-badge:hover {
+    margin-left: 0;
+  }
 }
 .bridge-wallet-badge {
   display: inline-flex;
@@ -584,9 +598,13 @@
   font-weight: 600;
   white-space: nowrap;
 }
-.bridge-wallet-badge:hover,
 .bridge-wallet-badge:focus-within {
   background: #eaf0ef;
+}
+@media (hover: hover) and (pointer: fine) {
+  .bridge-wallet-badge:hover {
+    background: #eaf0ef;
+  }
 }
 .bridge-wallet-connect {
   color: #617571;
@@ -641,24 +659,43 @@
     opacity 180ms ease,
     transform 240ms cubic-bezier(0.22, 1, 0.36, 1);
 }
-.bridge-wallet-badge:hover .bridge-wallet-actions,
 .bridge-wallet-badge:focus-within .bridge-wallet-actions {
   grid-template-columns: 1fr;
   margin-left: 0;
   opacity: 1;
 }
-.bridge-wallet-badge:hover .bridge-wallet-actions-inner > *,
+@media (hover: hover) and (pointer: fine) {
+  .bridge-wallet-badge:hover .bridge-wallet-actions {
+    grid-template-columns: 1fr;
+    margin-left: 0;
+    opacity: 1;
+  }
+}
 .bridge-wallet-badge:focus-within .bridge-wallet-actions-inner > * {
   opacity: 1;
   transform: none;
 }
-.bridge-wallet-badge:hover .bridge-wallet-actions-inner > :nth-child(2),
+@media (hover: hover) and (pointer: fine) {
+  .bridge-wallet-badge:hover .bridge-wallet-actions-inner > * {
+    opacity: 1;
+    transform: none;
+  }
+}
 .bridge-wallet-badge:focus-within .bridge-wallet-actions-inner > :nth-child(2) {
   transition-delay: 40ms;
 }
-.bridge-wallet-badge:hover .bridge-wallet-actions-inner > :nth-child(3),
+@media (hover: hover) and (pointer: fine) {
+  .bridge-wallet-badge:hover .bridge-wallet-actions-inner > :nth-child(2) {
+    transition-delay: 40ms;
+  }
+}
 .bridge-wallet-badge:focus-within .bridge-wallet-actions-inner > :nth-child(3) {
   transition-delay: 80ms;
+}
+@media (hover: hover) and (pointer: fine) {
+  .bridge-wallet-badge:hover .bridge-wallet-actions-inner > :nth-child(3) {
+    transition-delay: 80ms;
+  }
 }
 .bridge-wallet-actions button,
 .bridge-wallet-actions a {
@@ -669,9 +706,11 @@
   color: #617571;
   cursor: pointer;
 }
-.bridge-wallet-actions button:hover,
-.bridge-wallet-actions a:hover {
-  color: #0f1820;
+@media (hover: hover) and (pointer: fine) {
+  .bridge-wallet-actions button:hover,
+  .bridge-wallet-actions a:hover {
+    color: #0f1820;
+  }
 }
 
 .bridge-progress {
@@ -862,9 +901,11 @@
   cursor: pointer;
   text-decoration: none;
 }
-.bridge-progress-tx button:hover,
-.bridge-progress-tx a:hover {
-  color: #f8fdff;
+@media (hover: hover) and (pointer: fine) {
+  .bridge-progress-tx button:hover,
+  .bridge-progress-tx a:hover {
+    color: #f8fdff;
+  }
 }
 .bridge-progress-offer {
   display: flex;
@@ -900,8 +941,10 @@
   font-size: 12px;
   cursor: pointer;
 }
-.bridge-progress-link:hover {
-  color: #f8fdff;
+@media (hover: hover) and (pointer: fine) {
+  .bridge-progress-link:hover {
+    color: #f8fdff;
+  }
 }
 .bridge-progress-link:disabled {
   opacity: 0.5;
@@ -1264,8 +1307,10 @@
   text-decoration: underline;
   text-underline-offset: 3px;
 }
-.bridge-tip-link:hover {
-  color: #045c44;
+@media (hover: hover) and (pointer: fine) {
+  .bridge-tip-link:hover {
+    color: #045c44;
+  }
 }
 .bridge-mark {
   flex-shrink: 0;
@@ -1374,8 +1419,10 @@
   justify-content: center;
   padding: 0;
 }
-.bridge-flow-corner-btn:hover {
-  background: #1e2f38;
+@media (hover: hover) and (pointer: fine) {
+  .bridge-flow-corner-btn:hover {
+    background: #1e2f38;
+  }
 }
 .bridge-flow-main {
   display: flex;
@@ -1429,9 +1476,11 @@
   color: #5d6e73;
   cursor: pointer;
 }
-.bridge-flow-wallet button:hover {
-  background: #dce6e8;
-  color: #0f1820;
+@media (hover: hover) and (pointer: fine) {
+  .bridge-flow-wallet button:hover {
+    background: #dce6e8;
+    color: #0f1820;
+  }
 }
 .bridge-flow-tokens {
   display: flex;
@@ -1695,8 +1744,10 @@ button.bridge-flow-primary:disabled {
   text-underline-offset: 3px;
   cursor: pointer;
 }
-.bridge-flow-link:hover {
-  color: #f8fdff;
+@media (hover: hover) and (pointer: fine) {
+  .bridge-flow-link:hover {
+    color: #f8fdff;
+  }
 }
 .bridge-flow-link:disabled {
   opacity: 0.5;
@@ -1907,8 +1958,10 @@ button.bridge-flow-primary:disabled {
   color: #73878c;
   cursor: pointer;
 }
-.bridge-complete-close:hover {
-  background: #eaf2f1;
+@media (hover: hover) and (pointer: fine) {
+  .bridge-complete-close:hover {
+    background: #eaf2f1;
+  }
 }
 .bridge-complete-received {
   min-width: 0;
@@ -1973,8 +2026,10 @@ button.bridge-flow-primary:disabled {
   font-size: 14px;
   font-weight: 600;
 }
-.bridge-complete-earn:hover {
-  background: #c9efe2;
+@media (hover: hover) and (pointer: fine) {
+  .bridge-complete-earn:hover {
+    background: #c9efe2;
+  }
 }
 .bridge-complete-history h2 {
   margin-bottom: 12px;
@@ -2000,8 +2055,10 @@ button.bridge-flow-primary:disabled {
   background: #eaf2f1;
   color: #0f1820;
 }
-.bridge-complete-history li a:hover {
-  background: #dfebe7;
+@media (hover: hover) and (pointer: fine) {
+  .bridge-complete-history li a:hover {
+    background: #dfebe7;
+  }
 }
 .bridge-complete-check {
   display: grid;
@@ -2099,7 +2156,9 @@ button.bridge-flow-primary:disabled {
 .bridge-paste-field { position: relative; }
 .bridge-paste-field input { padding-right: 40px; }
 .bridge-paste-clear { position: absolute; top: 50%; right: 8px; display: grid; place-items: center; width: 28px; height: 28px; border-radius: 999px; color: #5d6e73; transform: translateY(-50%); cursor: pointer; }
-.bridge-paste-clear:hover { background: #dce6e8; color: #0f1820; }
+@media (hover: hover) and (pointer: fine) {
+  .bridge-paste-clear:hover { background: #dce6e8; color: #0f1820; }
+}
 .bridge-auto-recipient { margin-top: 16px; }
 .bridge-auto-recipient label { display: block; margin-bottom: 8px; font-size: 12px; font-weight: 600; }
 .bridge-auto-recipient input { width: 100%; color: #0f1820; background: #eaf0ef; }
@@ -2157,9 +2216,14 @@ button.bridge-flow-primary:disabled {
   cursor: pointer;
   transition: scale 160ms var(--bridge-ease-out);
 }
-.bridge-refresh:hover {
-  background: var(--btn-small-hover);
-  color: var(--txt-btn-small-hover);
+@media (hover: hover) and (pointer: fine) {
+  .bridge-refresh:hover {
+    background: var(--btn-small-hover);
+    color: var(--txt-btn-small-hover);
+  }
+  .bridge-refresh:hover > :last-child {
+    transform: rotate(180deg);
+  }
 }
 .bridge-refresh:focus-visible {
   outline: 2px solid #0ac18e;
@@ -2384,7 +2448,9 @@ button.bridge-flow-primary:disabled {
   cursor: pointer;
   transition: opacity 180ms ease, transform 180ms cubic-bezier(0.22, 1, 0.36, 1);
 }
-.bridge-exchange-open:hover { opacity: .85; }
+@media (hover: hover) and (pointer: fine) {
+  .bridge-exchange-open:hover { opacity: .85; }
+}
 .bridge-exchange-open:active { transform: scale(0.98); }
 .bridge-exchange-open:focus-visible, .bridge-exchange-copy:focus-visible, .bridge-exchange-toggle button:focus-visible { outline: 2px solid #0ac18e; outline-offset: 2px; }
 .bridge-exchange-steps { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }

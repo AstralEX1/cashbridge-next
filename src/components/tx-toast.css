@@ -191,9 +191,11 @@
     background-color 140ms var(--tx-toast-ease-out),
     color 140ms var(--tx-toast-ease-out);
 }
-.tx-toast-action:hover {
-  background: #84e0f71a;
-  color: var(--tx-toast-accent);
+@media (hover: hover) and (pointer: fine) {
+  .tx-toast-action:hover {
+    background: #84e0f71a;
+    color: var(--tx-toast-accent);
+  }
 }
 .tx-toast-action:active {
   transform: scale(0.94);
