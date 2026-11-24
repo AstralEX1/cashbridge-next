@@ -6,6 +6,17 @@ import { BchMark, TokenMark } from '@/components/swap/bridge-marks'
 import { PUSD_TOKEN } from '@/lib/cauldron-tokens'
 import type { FlowToast } from '@/components/swap/flow-toasts'
 import { BridgeFlow, CauldronQuoteBlock, type FlowStage } from '@/components/swap/pusd-swap'
+import { ExchangeDepositCard } from '@/components/swap/exchange-deposit-card'
+import type { PublicOrder } from '@/lib/auto-bridge-contract'
+
+// `exchange`: an order paid from an exchange, waiting for the withdrawal (a masked example deposit address).
+const EXCHANGE_ORDER = {
+  id: 'preview',
+  state: 'awaiting_deposit',
+  receivedSats: '0',
+  nearDepositAddress: '0x0000000000000000000000000000000000c0ffee',
+  source: { chain: 'BASE', asset: 'BASE.USDC-0X833589FCD6EDB6E08F4C7C32D4F71B54BDA02913', amount: '5', address: '0x76ff6F88f58e083b88A80B1764ae7002e303D1A6' }
+} as unknown as PublicOrder
 
 // Development only (`?bridgeFlowPreview=<stage>` on the swap page): the progress screen's stages
 // from fixed example figures, to look at them without an operation in flight. The real screen reads
@@ -21,6 +32,8 @@ const PREVIEW_TX = 'https://thorchain.net/'
 export const BridgeFlowPreview = ({ stage = 'bridging' }: { stage?: string }) => {
   const [dismissed, setDismissed] = useState<string[]>([])
   // `reverse-<stage>` previews the reverse direction (PUSD -> BCH -> ETH, or BCH -> ETH for `plain`).
+  const [now] = useState(() => Date.now())
+  const exchange = stage === 'exchange'
   const reverse = stage.startsWith('reverse-')
   const name = reverse ? stage.slice('reverse-'.length) : stage
   const nativeBch = name === 'done-bch'
@@ -33,7 +46,7 @@ export const BridgeFlowPreview = ({ stage = 'bridging' }: { stage?: string }) =>
       : []),
     ...(received ? [{ id: 'receive', title: 'BCH received', hash: 'b7d0e2c4f1a9e8d7c6b5a4f3e2d1c0b9a8f7e6d5c4b3a2f1e0d9c8b7a6f541c8', chain: Chain.BitcoinCash, icon: <BchMark size={30} /> }] : []),
     { id: 'send', title: received ? 'Send Tx confirmed' : 'Send Tx submitted', hash: '0x5e1c7d2b9a8f6e4c3b2a1908f7e6d5c4b3a29180f7e6d5c4b3a2918070a9f2', chain: Chain.Base, time: '19:11', icon: ETH_ICON, pending: !received }
-  ].filter(t => !dismissed.includes(t.id))
+  ].filter(t => !exchange && !dismissed.includes(t.id))
 
   return (
     <div className="bridge-flow-layer" role="dialog" aria-label="Bridge progress preview">
@@ -41,7 +54,7 @@ export const BridgeFlowPreview = ({ stage = 'bridging' }: { stage?: string }) =>
         stage={flow}
         title="Preview"
         sourceChain={Chain.Base}
-        sourceAddress="0x76ff6F88f58e083b88A80B1764ae7002e303D1A6"
+        sourceAddress={exchange ? undefined : "0x76ff6F88f58e083b88A80B1764ae7002e303D1A6"}
         bchAddress="bitcoincash:qp4qeeh8m6zd8r2yq7h0j3k5x9w2v4u6t8s0rm8w9z"
         reverse={reverse}
         sent={
@@ -49,7 +62,9 @@ export const BridgeFlowPreview = ({ stage = 'bridging' }: { stage?: string }) =>
             ? pusd
               ? { amount: '2.04', ticker: 'PUSD', usd: '$2.03', icon: <TokenMark token={PUSD_TOKEN} size={30} /> }
               : { amount: '0.0073', ticker: 'BCH', usd: '$2.05', icon: <BchMark size={30} /> }
-            : { amount: '0.000546306', ticker: 'ETH', usd: '$1.29', icon: ETH_ICON }
+            : exchange
+              ? { amount: '5', ticker: 'USDC', usd: '$5.00', icon: <span className="bridge-flow-icon"><img src="/networks/base.svg" width={30} height={30} alt="" /></span> }
+              : { amount: '0.000546306', ticker: 'ETH', usd: '$1.29', icon: ETH_ICON }
         }
         bch={
           reverse && !pusd
@@ -63,7 +78,7 @@ export const BridgeFlowPreview = ({ stage = 'bridging' }: { stage?: string }) =>
               : { amount: '≈ 2.04', ticker: 'PUSD', usd: '$2.03', icon: <TokenMark token={PUSD_TOKEN} size={30} /> }
             : undefined
         }
-        firstBar={received ? { fill: 1, done: true, href: PREVIEW_TX } : { fill: 0.6, eta: '≈ 2 min', live: true, href: PREVIEW_TX }}
+        firstBar={received ? { fill: 1, done: true, href: PREVIEW_TX } : exchange ? { fill: 0 } : { fill: 0.6, eta: '≈ 2 min', live: true, href: PREVIEW_TX }}
         secondBar={pusd ? (flow === 'swapping' ? { fill: 0.6, live: true, eta: '≈ 40 s' } : flow === 'done' ? { fill: 1, done: true } : { fill: 0, eta: '≈ 1 min' }) : undefined}
         completion={flow === 'done' ? {
           received: reverse
@@ -83,7 +98,13 @@ export const BridgeFlowPreview = ({ stage = 'bridging' }: { stage?: string }) =>
           liquidityCategory: reverse ? undefined : PUSD_TOKEN.category
         } : undefined}
         details={
-          flow === 'ready' ? (
+          exchange ? (
+            <ExchangeDepositCard
+              reference={{ id: 'preview', capability: '', exchange: { decimals: 6, amountIn: '5000000', minAmountIn: '4950000', deadline: now + 2 * 60 * 60_000 } }}
+              order={EXCHANGE_ORDER}
+              now={now}
+            />
+          ) : flow === 'ready' ? (
             <CauldronQuoteBlock
               quote={{
                 ticker: 'PUSD',
@@ -115,7 +136,7 @@ export const BridgeFlowPreview = ({ stage = 'bridging' }: { stage?: string }) =>
                 <circle cx="12" cy="12" r="9" stroke="#3a4f59" />
                 <path d="M12 3a9 9 0 019 9" stroke="#0ac18e" />
               </svg>
-              {flow === 'plain' ? `Bridging to ${reverse ? 'ETH' : 'BCH'}…` : 'Swap BCH → PUSD (2/2)'}
+              {exchange ? 'Waiting for your deposit' : flow === 'plain' ? `Bridging to ${reverse ? 'ETH' : 'BCH'}…` : 'Swap BCH → PUSD (2/2)'}
             </button>
           ) : undefined
         }

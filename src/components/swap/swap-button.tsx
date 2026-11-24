@@ -35,6 +35,9 @@ import { getNearQuote, isNearRoute, nearSlippageBps } from '@/lib/near-intents'
 import { getShapeShiftBridgeRoute, isShapeShiftRoute } from '@/lib/shapeshift'
 import { BridgeConfig } from '@/config'
 import { USwapError } from '@tcswap/helpers'
+import { QrCode } from 'lucide-react'
+import { ExchangeStartDialog } from '@/components/swap/exchange-deposit'
+import { exchangeChain } from '@/lib/exchange-deposit'
 
 interface SwapButtonProps {
   onShowBridge: () => void
@@ -69,7 +72,7 @@ export const SwapButton = ({ instantSwapSupported, instantSwapAvailable, onShowB
   const isMemolessHalted = useIsMemolessHalted()
   const setExternalWalletMode = useSetExternalWalletMode()
   const { valueFrom } = useSwap()
-  const { quote, isLoading: isQuoting, refetch: refetchQuote, minimum } = useQuote()
+  const { quote, routes, isLoading: isQuoting, refetch: refetchQuote, minimum } = useQuote()
   const { isLoading: isSimulating, approveData } = useSimulation()
   const { balance, isLoading: isBalanceLoading, error: balanceError, refetch: refetchBalance } = useBalance()
   const { mimir } = useMimir()
@@ -335,6 +338,19 @@ export const SwapButton = ({ instantSwapSupported, instantSwapAvailable, onShowB
   }
 
   const state = getState()
+  // No wallet on the source chain: the Router's NEAR Intents route also takes a withdrawal from an exchange.
+  const exchangeReady =
+    automatic &&
+    !openNetworks &&
+    BridgeConfig.routerNear &&
+    exchangeChain(assetFrom?.chain) &&
+    !!routes?.near &&
+    !valueFrom.eqValue(0) &&
+    !!addressToLockingBytecode(recipient) &&
+    !activeBridge &&
+    !preparing &&
+    !!bchToken &&
+    (tokenEstimate.output ?? 0n) > 0n
 
   // The notice belongs to the transfer that failed: a different amount, asset or mode clears it.
   const transferKey = `${assetFrom?.identifier}|${valueFrom.toSignificant()}|${automatic}`
@@ -358,6 +374,12 @@ export const SwapButton = ({ instantSwapSupported, instantSwapAvailable, onShowB
       >
         {state.text}
       </AnimatedButton>
+      {exchangeReady && (
+        <button type="button" className="bridge-exchange-open" onClick={() => openDialog(ExchangeStartDialog, {})}>
+          <QrCode size={16} aria-hidden="true" />
+          {tAuto('exchange.open')}
+        </button>
+      )}
       {routerDown && (
         <RouterUnavailable
           onRetry={() => {

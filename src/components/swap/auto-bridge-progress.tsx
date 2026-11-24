@@ -41,7 +41,8 @@ import { orderRequest, pollAutomaticOrders, restoreAutomaticOrder, type OrderPol
 import { sourceTransactionId } from '@/lib/source-transaction'
 import { orderSent } from '@/lib/local-scan'
 import { sideOf } from '@/lib/scanner'
-import { autoBridgeStore, type SavedAutoOrder } from '@/store/auto-bridge-store'
+import { autoBridgeStore, exchangeOpen, type SavedAutoOrder } from '@/store/auto-bridge-store'
+import { awaitingExchange, ExchangeDepositCard } from '@/components/swap/exchange-deposit-card'
 
 const BCH_STAGES = ['awaiting_deposit', 'streaming']
 
@@ -66,7 +67,7 @@ const AutomaticOrderRow = ({ reference }: { reference: SavedAutoOrder }) => {
   const ticker = asset?.ticker ?? source?.asset.split('.')[1]?.split('-')[0] ?? 'BCH'
   const mark = !asset && source ? sideOf(ticker, source.chain).icon : undefined
   const receipt = order && automaticCompletion(order, token)
-  const state = t(order ? `states.${order.state}` : 'restoring', { bridge: orderBridge(order) })
+  const state = awaitingExchange(reference, order) ? t('exchange.waiting') : t(order ? `states.${order.state}` : 'restoring', { bridge: orderBridge(order) })
   return (
     <button type="button" className="bridge-auto-card" onClick={() => openDialog(AutomaticOrderDialog, { id: reference.id })} aria-label={`${t('viewTransfer')}: ${state}`}>
       <span className="bridge-auto-side">
@@ -123,7 +124,7 @@ export const AutomaticOrders = () => {
   }, [ids])
   if (!hydrated) return null
   // A draft is not a transfer: it stays polled, but is listed only once the user signed something for it.
-  const active = references.filter(ref => (!ref.order || !isTerminal(ref.order.state)) && orderSent(ref)).slice(-3)
+  const active = references.filter(ref => (!ref.order || !isTerminal(ref.order.state)) && (orderSent(ref) || exchangeOpen(ref))).slice(-3)
   // A card closes as soon as the payout is on the network; its toast still shows the confirmations coming in.
   const running = active.filter(ref => !ref.order || !automaticCompletion(ref.order))
   return (
@@ -207,7 +208,9 @@ function BackgroundAutomaticToasts({ active }: { active: SavedAutoOrder[] }) {
       items.push({
         id: `auto:${reference.id}:status`,
         title: `${t('automatic')} · ${token.ticker}`,
-        description: t(draft ? 'draft' : order ? `states.${order.state}` : 'restoring', { bridge: orderBridge(order) }),
+        description: awaitingExchange(reference, order)
+          ? t('exchange.waiting')
+          : t(draft ? 'draft' : order ? `states.${order.state}` : 'restoring', { bridge: orderBridge(order) }),
         icon,
         pending: true,
         actionLabel: t('viewTransfer'),
@@ -263,6 +266,10 @@ export const AutomaticOrderDialog = ({ id, isOpen, onOpenChange }: { id: string;
   }
 
   const draft = !!order && !reference?.sourceAttempted && !order.sourceHash && order.state === 'awaiting_deposit'
+  // Paid from an exchange: until the withdrawal shows up, the order is its deposit address.
+  const exchangeWaiting = awaitingExchange(reference, order)
+  // Its window closed with nothing sent: nothing is left to wait for on this page.
+  const exchangeLate = exchangeWaiting && order?.state === 'awaiting_deposit' && reference!.exchange!.deadline <= now
   const stage: FlowStage = receipt ? 'done' : terminal ? 'ended' : firstDone ? 'swapping' : 'bridging'
   const sourceHash = order?.sourceHash ?? reference?.sourceHash
   const start = order?.createdAt ?? reference?.createdAt ?? now
@@ -278,7 +285,7 @@ export const AutomaticOrderDialog = ({ id, isOpen, onOpenChange }: { id: string;
   const payoutHref = order?.settlement?.seen ? chainTxUrl(Chain.BitcoinCash, order.settlement.txid) : undefined
   const firstBar: FlowBar = firstDone
     ? { fill: 1, done: true, href: bridgeHref }
-    : draft
+    : draft || exchangeWaiting
       ? { fill: 0 }
       : {
           fill: reference?.estimatedSeconds ? Math.min(0.95, Math.max(0.05, (now - start) / (reference.estimatedSeconds * 1000))) : 0.5,
@@ -329,9 +336,10 @@ export const AutomaticOrderDialog = ({ id, isOpen, onOpenChange }: { id: string;
   // A NEAR Intents order is found by its deposit address, so it never needs the hash typed in.
   const hashMissing = !!reference?.sourceAttempted && !order?.sourceHash && !order?.inboundHash && !order?.nearDepositAddress && !receipt
   // The service does the rest once the source hash is known; nothing more is asked of the user.
-  const handsOff = !!order && !terminal && !draft && !hashMissing && !order.recoveryRequired
+  const handsOff = !!order && !terminal && !draft && !hashMissing && !exchangeWaiting && !order.recoveryRequired
   const waiting = order && ['retrying', 'broadcasting', 'awaiting_confirmations'].includes(order.state)
   const details = <>
+    {exchangeWaiting && <ExchangeDepositCard reference={reference!} order={order!} now={now} />}
     {!order && <p role="status" className="bridge-flow-message">{t('restoring')}</p>}
     {draft && <p className="bridge-flow-message">{t('draft')}</p>}
     {waiting && <p role="status" className="bridge-flow-message">{t(`states.${order.state}`, { bridge: orderBridge(order) })}</p>}
@@ -346,9 +354,11 @@ export const AutomaticOrderDialog = ({ id, isOpen, onOpenChange }: { id: string;
       <GenericButton onClick={saveHint} disabled={busy || !sourceTransactionId(hint)}>{busy && <LoaderCircle size={14} className="animate-spin" />}{t('saveHint')}</GenericButton>
     </div>}
   </>
-  const actions = terminal || draft
+  const actions = terminal || draft || exchangeLate
     ? <GenericButton className="bridge-flow-primary is-active w-full" onClick={close}>{tb('progress.done')}</GenericButton>
-    : firstDone
+    : exchangeWaiting
+      ? <WaitingButton>{t('exchange.waiting')}</WaitingButton>
+      : firstDone
       ? <WaitingButton>{tb('progress.swapping')}</WaitingButton>
       : <WaitingButton>{tb('progress.swapAction', { ticker: token.ticker })}</WaitingButton>
   const title = receipt ? tb('progress.completeTitle') : firstDone ? tb('progress.swapping') : tb('progress.processing')
@@ -361,7 +371,8 @@ export const AutomaticOrderDialog = ({ id, isOpen, onOpenChange }: { id: string;
         stage={stage}
         title={title}
         sourceChain={(source?.chain as Chain) ?? Chain.Ethereum}
-        sourceAddress={source?.address}
+        // An exchange order's source address is its refund address, not a wallet that sent anything.
+        sourceAddress={reference?.exchange ? undefined : source?.address}
         bchAddress={order?.recipientAddress ?? reference?.intent?.recipientAddress ?? ''}
         sent={sent}
         bch={bch}

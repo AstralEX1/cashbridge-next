@@ -105,7 +105,7 @@ export const BchWalletChooser = ({
 
 // A WalletConnect URI is mixed case with punctuation, so it is encoded in byte mode (WizardConnect's
 // dialog only does alphanumeric). Drawn as one SVG path so it stays sharp at any size.
-const qrPath = (value: string) => {
+export const qrPath = (value: string) => {
   const qr = qrcode(0, 'M')
   qr.addData(value, 'Byte')
   qr.make()

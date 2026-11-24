@@ -17,6 +17,9 @@ export interface SavedAutoOrder {
   // The secret of the one-use key the order's contract accepts from this page (src/lib/page-settle.ts); '' once the
   // order no longer needs it.
   pageSecret?: string
+  // Paid from an exchange to the NEAR Intents deposit address (src/lib/exchange-deposit.ts): the quoted deposit in the
+  // source asset's base units, the least 1Click swaps, and when its window closes (ms).
+  exchange?: { decimals: number; amountIn: string; minAmountIn: string; deadline: number }
 }
 interface AutoBridgeStore {
   orders: SavedAutoOrder[]
@@ -32,6 +35,15 @@ const DRAFT_TTL_MS = 30 * 60_000
 // The source wallet was never opened for it (a declined request clears the mark) and no chain has paid it.
 export const isAutomaticDraft = (ref: SavedAutoOrder) =>
   !ref.sourceAttempted && !ref.sourceHash && !ref.order?.sourceHash && !ref.order?.inboundHash && BigInt(ref.order?.receivedSats || '0') === 0n
+// An exchange deposit address still inside its window and not paid yet: listed under the form so its QR code can be
+// opened again. One nobody paid drops off the list when the window closes.
+export const exchangeOpen = (ref: SavedAutoOrder, now = Date.now()) =>
+  !!ref.exchange && now < ref.exchange.deadline && (!ref.order || ref.order.state === 'awaiting_deposit' || ref.order.state === 'streaming')
+// An exchange deposit address nobody paid, a day after its window closed: a payment would have shown by now on any visit.
+const EXCHANGE_KEEP_MS = 24 * 60 * 60_000
+export const exchangeLapsed = (ref: SavedAutoOrder, now = Date.now()) =>
+  !!ref.exchange && now > ref.exchange.deadline + EXCHANGE_KEEP_MS && (!ref.order || ref.order.state === 'awaiting_deposit') &&
+  !ref.sourceHash && !ref.order?.sourceHash && BigInt(ref.order?.receivedSats || '0') === 0n
 const forgetOrder = (id: string) => {
   localStorage.removeItem(ORDER_PREFIX + id)
   localStorage.removeItem(SOURCE_PREFIX + id)
@@ -55,7 +67,7 @@ const orderStorage = (): StateStorage => {
       for (const ref of orders.values()) {
         if (localStorage.getItem(SOURCE_PREFIX + ref.id) === 'attempted') ref.sourceAttempted = true
         // Automatic transfers keep no drafts: one the user never sent is dropped.
-        if (isAutomaticDraft(ref) && ref.createdAt !== undefined && Date.now() - ref.createdAt > DRAFT_TTL_MS) {
+        if ((isAutomaticDraft(ref) && ref.createdAt !== undefined && Date.now() - ref.createdAt > DRAFT_TTL_MS) || exchangeLapsed(ref)) {
           forgetOrder(ref.id)
           orders.delete(ref.id)
           continue
@@ -100,16 +112,26 @@ export const autoBridgeStore = create<AutoBridgeStore>()(
 interface AutomaticPreference {
   mode: 'manual' | 'automatic'
   recipient: string
+  // The last refund address typed per source chain for an exchange deposit.
+  refunds: Record<string, string>
   setMode: (mode: 'manual' | 'automatic') => void
   setRecipient: (recipient: string) => void
+  setRefund: (chain: string, address: string) => void
 }
 // Every transfer the order contract can take goes through it; Manual is the user's own pick, kept from version 1 on.
 export const automaticPreference = create<AutomaticPreference>()(persist(
-  set => ({ mode: 'automatic', recipient: '', setMode: mode => set({ mode }), setRecipient: recipient => set({ recipient }) }),
+  set => ({
+    mode: 'automatic',
+    recipient: '',
+    refunds: {},
+    setMode: mode => set({ mode }),
+    setRecipient: recipient => set({ recipient }),
+    setRefund: (chain, address) => set(state => ({ refunds: { ...state.refunds, [chain]: address } }))
+  }),
   {
     name: 'cashbridge-execution',
     version: 1,
-    partialize: state => ({ mode: state.mode, recipient: state.recipient }),
-    migrate: saved => ({ recipient: (saved as { recipient?: string } | undefined)?.recipient ?? '', mode: 'automatic' as const })
+    partialize: state => ({ mode: state.mode, recipient: state.recipient, refunds: state.refunds }),
+    migrate: saved => ({ recipient: (saved as { recipient?: string } | undefined)?.recipient ?? '', mode: 'automatic' as const, refunds: {} })
   }
 ))

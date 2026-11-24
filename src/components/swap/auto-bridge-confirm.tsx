@@ -66,6 +66,7 @@ const prepareOrder = async ({
   expectedBuyAmount,
   provider,
   slippage,
+  exchange,
   messages
 }: {
   id: string
@@ -78,8 +79,12 @@ const prepareOrder = async ({
   expectedBuyAmount: string
   provider: ProviderName
   slippage?: number
+  // Paid from an exchange: NEAR Intents only, and a deposit that may come in a little under the quote (FLEX_INPUT, down
+  // to its minAmountIn) after the exchange takes its withdrawal fee. `source.address` is then the refund address.
+  exchange?: boolean
   messages: { invalidAddress: string; serviceUpdate: string; noRoute: string }
 }): Promise<PreparedAutomatic> => {
+  if (exchange && provider !== ProviderName.NEAR) throw new Error(messages.noRoute)
   if (bchAddressProblem(recipient, true)) throw new Error(messages.invalidAddress)
   const intent: OrderIntent = { recipientAddress: recipient, refundAddress: recipient, source, expectedBchSats: toBaseUnits(expectedBuyAmount, 8).toString() }
   // PUSD orders leave the category out, so a Router that only knows PUSD still accepts them.
@@ -124,6 +129,7 @@ const prepareOrder = async ({
             refundTo: source.address,
             dry: false,
             slippageBps: nearSlippageBps(slippage),
+            flexible: exchange,
             now
           })
         : getShapeShiftBridgeRoute({
@@ -145,7 +151,12 @@ const prepareOrder = async ({
       // The Router learns the deposit address before Confirm, so it finds the payout even if this tab closes.
       const noted = await orderRequest(reference, 'POST', { nearDepositAddress: depositAddress, ...(leg.shapeshiftQuoteId && { shapeshiftQuoteId: leg.shapeshiftQuoteId }) })
       if (noted.nearDepositAddress !== depositAddress) throw new Error(messages.noRoute)
-      autoBridgeStore.getState().patch(reference.id, { order: noted })
+      const paid =
+        exchange && isNearRoute(route)
+          ? { decimals: sourceDecimals, amountIn: route.near.quote.amountIn, minAmountIn: route.near.quote.minAmountIn, deadline: Number(route.expiration) * 1000 }
+          : undefined
+      if (exchange && !(paid && Number.isFinite(paid.deadline))) throw new Error(messages.noRoute)
+      autoBridgeStore.getState().patch(reference.id, { order: noted, ...(paid && { exchange: paid }) })
       return { status: 'ok' as const, order: noted, route }
     }
 

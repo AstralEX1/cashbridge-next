@@ -1068,7 +1068,37 @@
       "source_refunded": "Source refund reported by {bridge}",
       "manual_review": "Operator review required"
     },
-    "serviceUpdate": "Automatic service recovery or upgrade is in progress. Check this saved order before sending funds."
+    "serviceUpdate": "Automatic service recovery or upgrade is in progress. Check this saved order before sending funds.",
+    "exchange": {
+      "open": "Send from an exchange",
+      "title": "Send from an exchange",
+      "steps": "Scan the QR, withdraw from your exchange, {ticker} lands in your BCH wallet",
+      "step1": "Scan the QR",
+      "step2": "Withdraw from your exchange",
+      "step3": "{ticker} lands in your BCH wallet",
+      "refundLabel": "Refund address on {chain}",
+      "refundHint": "A wallet you own. If the swap can't run, the {ticker} comes back here. An exchange deposit address may not credit a refund.",
+      "refundInvalid": "Not a {chain} address",
+      "getAddress": "Get deposit address",
+      "preparing": "Getting the deposit address…",
+      "qrKind": "QR code content",
+      "qrLink": "With amount",
+      "qrAddress": "Address only",
+      "network": "{chain} only",
+      "min": "Min {amount} {ticker}",
+      "refund": "Refund {address}",
+      "amount": "Amount",
+      "address": "Deposit address",
+      "copy": "Copy",
+      "copied": "Copied",
+      "watching": "Watching for your {ticker}",
+      "arriving": "{ticker} deposit seen on {chain}. Swapping to BCH…",
+      "short": "{received} {ticker} arrived, under the minimum. Send {missing} {ticker} more to the same address before {time}, or it goes back to your refund address.",
+      "shortUnknown": "Less than the {min} {ticker} minimum arrived. Top it up to the same address before {time}, or it goes back to your refund address.",
+      "expired": "This deposit address has expired. Don't send to it: start a new transfer.",
+      "fee": "Send only {ticker} on {chain}. The exchange's withdrawal fee comes on top: at least {min} {ticker} must arrive.",
+      "waiting": "Waiting for your deposit"
+    }
   },
   "bridgeHero": {
     "title": "Bridge Hero",

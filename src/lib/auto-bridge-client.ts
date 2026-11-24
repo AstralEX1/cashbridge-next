@@ -149,3 +149,18 @@ export async function startAutomaticSource(
   if (!hash) throw new Error('This transfer is being confirmed in another window')
   return hash
 }
+
+// Paying from an exchange: no wallet is opened, so showing the deposit address is the attempt. From here on the order is
+// kept and watched like one the wallet sent, and is never created again under a fresh quote.
+export async function startExchangeDeposit(reference: SavedAutoOrder) {
+  if (typeof window !== 'undefined' && !navigator.locks) throw new Error('Please use an updated browser to start an automatic transfer safely')
+  const started = await withLock(`cashbridge-auto-source-${reference.id}`, async () => {
+    const order = autoBridgeStore.getState().orders.find(item => item.id === reference.id)?.order
+    if (!order?.nearDepositAddress || order.state !== 'awaiting_deposit') throw new Error('Prepare a new deposit address for this order')
+    if (typeof window !== 'undefined') localStorage.setItem(attemptKey(reference.id), 'attempted')
+    autoBridgeStore.getState().patch(reference.id, { sourceAttempted: true })
+    assertAutomaticSaved(reference, true)
+    return true
+  })
+  if (!started) throw new Error('This transfer is being confirmed in another window')
+}
