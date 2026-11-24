@@ -469,7 +469,7 @@ const ProgressBar = ({ label, bar }: { label: string; bar: FlowBar }) => {
       aria-valuemax={100}
       aria-valuenow={Math.round(bar.fill * 100)}
     >
-      <i className={`bridge-flow-fill${bar.live ? ' is-live' : ''}`} style={{ width: `${Math.round(bar.fill * 100)}%` }} />
+      <i className={`bridge-flow-fill${bar.live ? ' is-live' : ''}`} style={{ transform: `translateX(${Math.round(bar.fill * 100) - 100}%)` }} />
       <span>
         {label}
         {bar.done ? (

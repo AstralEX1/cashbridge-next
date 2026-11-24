@@ -155,7 +155,7 @@ export const BchInputFrom = ({ selecting, onSelectOpenChange }: BridgeInputProps
           </div>
         </section>
       </div>
-      <div className="bridge-input-switcher__slot bridge-input-switcher__picker-slot" aria-hidden={!selecting} inert={!selecting}>
+      <div className="bridge-input-switcher__slot" aria-hidden={!selecting} inert={!selecting}>
         <BridgeAssetPicker side="from" bch open={selecting} onClose={close} />
       </div>
     </BridgeInputSwitcher>
@@ -208,7 +208,7 @@ export const ReverseInputTo = ({ selecting, onSelectOpenChange }: BridgeInputPro
           </div>
         </section>
       </div>
-      <div className="bridge-input-switcher__slot bridge-input-switcher__picker-slot" aria-hidden={!selecting} inert={!selecting}>
+      <div className="bridge-input-switcher__slot" aria-hidden={!selecting} inert={!selecting}>
         <BridgeAssetPicker side="to" bch={false} open={selecting} onClose={close} />
       </div>
     </BridgeInputSwitcher>

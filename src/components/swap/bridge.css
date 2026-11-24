@@ -1,3 +1,8 @@
+/* Motion: one strong ease-out for UI that enters, leaves or answers a press. */
+:root {
+  --bridge-ease-out: cubic-bezier(0.23, 1, 0.32, 1);
+}
+
 .bridge-page {
   min-height: 100vh;
   padding: 32px 16px 64px;
@@ -82,49 +87,31 @@
   box-shadow: 0 16px 70px #00000012;
   color-scheme: light;
 }
+/* The form and the picker share one box: the shown slot sets the height (animated in
+   bridge-input-switcher.tsx), the hidden one lies on top of it and fades out. */
 .bridge-input-switcher {
-  display: grid;
-  grid-template-rows: minmax(0, 1fr) minmax(0, 0fr);
+  position: relative;
   overflow: clip;
   overflow-clip-margin: 12px;
-  transition: height 620ms ease-in-out;
+  transition: height 240ms var(--bridge-ease-out);
 }
 .bridge-input-switcher[data-selecting='true'] {
-  grid-template-rows: minmax(0, 0fr) minmax(0, 1fr);
-  transition-duration: 520ms;
-  transition-timing-function: linear(
-    0,
-    0.876 6%,
-    0.897 9%,
-    0.909 12%,
-    0.922 15%,
-    0.932 18%,
-    0.953 22%,
-    0.959 27%,
-    0.969 30%,
-    0.981 36%,
-    0.987 39%,
-    0.987 42%,
-    0.994 45%,
-    1.003 49%,
-    1.003 65%,
-    1.006 76%,
-    1.003 80%,
-    1.003 90%,
-    1 100%
-  );
+  transition-duration: 300ms;
 }
 .bridge-input-switcher__slot {
-  min-height: 0;
   overflow: clip;
   overflow-clip-margin: 12px;
+  transition: opacity 200ms var(--bridge-ease-out) 60ms;
 }
 .bridge-input-switcher__slot[aria-hidden='true'] {
+  position: absolute;
+  inset: 0 0 auto;
   visibility: hidden;
+  opacity: 0;
   pointer-events: none;
-}
-.bridge-input-switcher__picker-slot[aria-hidden='true'] {
-  transition: visibility 0s linear 520ms;
+  transition:
+    opacity 120ms var(--bridge-ease-out),
+    visibility 0s linear 120ms;
 }
 .bridge-input {
   min-width: 0;
@@ -330,14 +317,23 @@
   font-weight: 500;
   line-height: 1;
   cursor: pointer;
+  /* Transitions, not keyframes: a pointer that comes back mid-exit turns the chips around from where they are. */
   transition:
     background-color 140ms ease,
-    color 140ms ease;
-  animation: bridge-preset-in 220ms cubic-bezier(0.22, 0.9, 0.32, 1) both;
-  animation-delay: var(--bridge-preset-delay, 0ms);
+    color 140ms ease,
+    scale 160ms var(--bridge-ease-out),
+    opacity 200ms var(--bridge-ease-out) var(--bridge-preset-delay, 0ms),
+    transform 200ms var(--bridge-ease-out) var(--bridge-preset-delay, 0ms);
+}
+@starting-style {
+  .bridge-preset {
+    opacity: 0;
+    transform: translateY(4px) scale(0.95);
+  }
 }
 .bridge-presets.is-leaving .bridge-preset {
-  animation-name: bridge-preset-out;
+  opacity: 0;
+  transform: translateY(2px) scale(0.96);
 }
 .bridge-preset:hover {
   background: #0f18201a;
@@ -347,18 +343,6 @@
   background: #0ac18e29;
   color: #0f1820;
 }
-@keyframes bridge-preset-in {
-  from {
-    opacity: 0;
-    transform: translateY(4px) scale(0.95);
-  }
-}
-@keyframes bridge-preset-out {
-  to {
-    opacity: 0;
-    transform: translateY(2px) scale(0.96);
-  }
-}
 @media (max-width: 380px) {
   .bridge-preset {
     padding: 0 8px;
@@ -366,8 +350,14 @@
   }
 }
 @media (prefers-reduced-motion: reduce) {
-  .bridge-preset {
-    animation: none;
+  .bridge-preset,
+  .bridge-presets.is-leaving .bridge-preset {
+    transform: none;
+  }
+  @starting-style {
+    .bridge-preset {
+      transform: none;
+    }
   }
 }
 .bridge-divider {
@@ -432,12 +422,6 @@
 .bridge-picker {
   height: 442px;
   overflow-y: auto;
-  opacity: 0;
-  transition: opacity 520ms ease-in;
-}
-.bridge-input-switcher[data-selecting='true'] .bridge-picker {
-  opacity: 1;
-  transition: opacity 420ms ease-out 40ms;
 }
 .bridge-picker-head {
   position: sticky;
@@ -936,16 +920,12 @@
     opacity: 1;
   }
 }
+/* Reduced motion keeps the crossfade between form and picker, without the card resizing in steps. */
 @media (prefers-reduced-motion: reduce) {
   .bridge-input-switcher,
   .bridge-pill.bridge-asset-button,
-  .bridge-asset-button::before,
-  .bridge-input-switcher__slot[aria-hidden='true'],
-  .bridge-picker {
+  .bridge-asset-button::before {
     transition: none;
-  }
-  .bridge-input-switcher .bridge-picker {
-    animation: none !important;
   }
   .bridge-progress-step[data-state='active'] .bridge-progress-bars i {
     animation: none;
@@ -1524,14 +1504,14 @@
   border-radius: 14px;
   background: #dce6e8;
 }
+/* Full width, slid in from the left by the progress (transform, so the bar never relays out). */
 .bridge-flow-fill {
   position: absolute;
-  top: 0;
-  bottom: 0;
-  left: 0;
+  inset: 0;
   border-radius: 14px;
   background: #0ac18e;
-  transition: width 600ms ease;
+  transform: translateX(-100%);
+  transition: transform 600ms var(--bridge-ease-out);
 }
 /* The shimmer is a gradient layer three fills wide (two tiles of the gradient per fill width) that
    slides by two tiles, so it moves with transform instead of repainting a background every frame. */
@@ -1821,13 +1801,12 @@ button.bridge-flow-primary:disabled {
     width: 100%;
   }
 }
+/* The screen's fade-in and the spinner stay: neither moves anything across the screen. */
 @media (prefers-reduced-motion: reduce) {
-  .bridge-flow-layer,
   .bridge-flow-arrow.is-live,
   .bridge-flow-fill.is-live::after,
   .bridge-flow-tile,
-  .bridge-flow-slide,
-  .bridge-flow-spinner {
+  .bridge-flow-slide {
     animation: none;
   }
   .bridge-flow-fill {

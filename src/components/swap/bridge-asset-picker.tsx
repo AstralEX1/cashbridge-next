@@ -114,6 +114,8 @@ export const BridgeAssetPicker = ({ side, bch, open, onClose }: { side: 'from' |
   const tokensLabel = useRef<HTMLParagraphElement>(null)
   const head = useRef<HTMLDivElement>(null)
   const [chainTap, setChainTap] = useState(0)
+  // Counts openings, so the token pills play their entrance when the picker opens but not while it closes.
+  const [opened, setOpened] = useState(0)
   const assets = useMemo(() => {
     if (!modeAssets) return []
     if (openNetworks) return modeAssets.filter(a => a.identifier !== other?.identifier)
@@ -156,7 +158,9 @@ export const BridgeAssetPicker = ({ side, bch, open, onClose }: { side: 'from' |
     if (!open) return
     setChain(selected?.chain)
     setSearch('')
-    searchInput.current?.focus()
+    setOpened(n => n + 1)
+    // On touch screens the keyboard would cover the list the picker was opened for; typing starts with a tap.
+    if (matchMedia('(hover: hover)').matches) searchInput.current?.focus()
   }, [open, selected?.chain])
 
   // A tapped chain glides the picker itself (never the page) down to that chain's tokens, after they render,
@@ -255,7 +259,7 @@ export const BridgeAssetPicker = ({ side, bch, open, onClose }: { side: 'from' |
       <p ref={tokensLabel} className="bridge-picker-label">
         {t('tokens')}
       </p>
-      <div key={open ? activeChain : 'closed'} className="bridge-options bridge-token-options" role="group" aria-label={t('tokens')}>
+      <div key={`${activeChain}-${opened}`} className="bridge-options bridge-token-options" role="group" aria-label={t('tokens')}>
         {bch ? (
           <>
             {showBch && (
