@@ -65,6 +65,22 @@ export default function Page() {
         </Step>
       </Steps>
 
+      <h2 id="to-an-exchange">Pay out to an exchange</h2>
+      <p>
+        To be paid straight on an exchange, open the payout button&apos;s menu, choose <strong>Send to an exchange</strong> and paste the deposit address the exchange shows for that coin and network. Manual and Cashbridge Router transfers pay it the same way. The payout carries no memo or destination tag, so:
+      </p>
+      <ul>
+        <li>
+          <strong>XRP Ledger, Cosmos and THORChain are refused.</strong> Exchanges there credit a deposit by its memo or tag, and neither THORChain nor NEAR Intents can send one with a payout. Pick another network, or receive in your own wallet and send it on from there.
+        </li>
+        <li>
+          <strong>Native coins on EVM chains</strong> such as ETH are paid by a contract as an internal transfer, which some exchanges do not credit. Check yours, or receive a token such as USDC.
+        </li>
+        <li>
+          <strong>Check the exchange&apos;s minimum deposit.</strong> If the swap cannot run, the refund comes back to your BCH wallet, not to the exchange.
+        </li>
+      </ul>
+
       <h2 id="stops">If a step stops</h2>
       <ul>
         <li>
