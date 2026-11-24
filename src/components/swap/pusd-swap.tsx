@@ -290,8 +290,7 @@ const syncFirstLeg = async (tx: BridgeTx, update: ReturnType<typeof useUpdateBri
     refunds: view.refunds,
     received: unique,
     firstLeg: { ...current.firstLeg, ...timing, result: view.result },
-    error:
-      op.destinationAsset !== 'BCH' && unique.some(o => !o.unspent && o.confirmations > 0) ? 'Some received BCH has already been spent' : undefined
+    error: undefined
   }))
 }
 
@@ -307,8 +306,15 @@ const syncReceived = async (tx: BridgeTx, update: ReturnType<typeof useUpdateBri
     return update(tx.uid, current => sameSecondAttempt(current, op) ? { stage: ready ? nativeStage : 'bch_unconfirmed', received: checked } : {})
   }
   const allUnspent = checked.every(o => o.unspent)
-  // Outputs spent by something other than this app's second leg: the user moved their BCH.
-  if (!allUnspent && op.stage === 'bch_ready') {
+  // Outputs spent by something other than this app's second leg: the user moved their BCH. Before the swap is offered a
+  // missing output may only lag at the server: it counts as spent once it was seen unspent, or its transaction is mined.
+  const gone = checked.find(o => !o.unspent)
+  const spent =
+    !!gone &&
+    (op.stage === 'bch_ready' ||
+      checked.some((o, i) => !o.unspent && op.received![i]?.unspent) ||
+      (await getTransactionState(gone.txid).then(state => state.seen && state.confirmations > 0)))
+  if (spent) {
     return update(tx.uid, current => sameSecondAttempt(current, op) ? { stage: 'kept_bch', received: checked, error: 'The received BCH was spent from your wallet outside this app' } : {})
   }
   const ready = allUnspent && checked.every(o => o.confirmations >= BridgeConfig.minConfirmations)

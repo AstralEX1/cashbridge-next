@@ -832,10 +832,10 @@ test('the chains decide the first leg: BCH seen at the bound address (0-conf) ma
   // Plain BCH: arrival finishes the operation.
   assert.equal(firstLegFromChain({ ...op, destinationAsset: 'BCH' }, { outbound: { kind: 'ok', outputs, total: '4873362', confirmations: 0 } }).stage, 'kept_bch')
 
-  // Already spent from the wallet before the swap: not offered for the PUSD swap.
-  const spent = firstLegFromChain(op, { outbound: { kind: 'ok', outputs: [{ ...outputs[0], unspent: false, confirmations: 1 }], total: '4873362', confirmations: 1 } })
+  // Already gone from the wallet's coins (spent, or not yet listed by the server): not offered for the PUSD swap. A coin
+  // missing from the list has no confirmations to report.
+  const spent = firstLegFromChain(op, { outbound: { kind: 'ok', outputs: [{ ...outputs[0], unspent: false, confirmations: 0 }], total: '4873362', confirmations: 0 } })
   assert.equal(spent.stage, 'bch_unconfirmed')
-  assert.match(spent.error, /already been spent/)
 
   // A reverted source transaction ends the operation; nothing reached THORChain.
   assert.equal(firstLegFromChain(op, { source: { confirmations: 2, failed: true } }).stage, 'failed')
