@@ -76,10 +76,11 @@ const THORNODE_SHORT_CODES: Record<string, string> = {
 // The quoted memo must swap to the asked asset and pay the asked address: `=:ASSET:DEST[:LIMIT...]`
 // (also `s`/`swap`). THORChain accepts the asset in its short form (BASE.USDC for
 // BASE.USDC-0X8335...), or the protocol's short code (`b` for BTC.BTC), which the aggregator uses to
-// fit the 80 bytes.
-export const checkDepositMemo = (memo: string, { buyAsset, destination, shortCode }: { buyAsset: string; destination: string; shortCode?: string }) => {
+// fit the 80 bytes. With `minOut` (the "at least" amount shown, in the asset's units) a limit the memo sets must not be
+// looser than it.
+export const checkDepositMemo = (memo: string, { buyAsset, destination, shortCode, minOut }: { buyAsset: string; destination: string; shortCode?: string; minOut?: string }) => {
   if (utf8ToBin(memo).length > MAX_MEMO_BYTES) throw new DepositError('The swap memo is longer than THORChain reads')
-  const [action, asset = '', dest = ''] = memo.split(':')
+  const [action, asset = '', dest = '', limitField = ''] = memo.split(':')
   if (!['=', 's', 'swap'].includes(action.toLowerCase())) throw new DepositError('The memo is not a swap')
   const want = buyAsset.toUpperCase()
   const got = asset.toUpperCase()
@@ -87,6 +88,15 @@ export const checkDepositMemo = (memo: string, { buyAsset, destination, shortCod
   const codes = [THORNODE_SHORT_CODES[want], shortCode?.toLowerCase()]
   if (got !== want && got !== chainSymbol && !codes.includes(asset)) throw new DepositError('The memo swaps to a different asset')
   if (!sameAddress(dest, destination)) throw new DepositError('The memo pays a different address')
+  // THORChain's limit is in 1e8 units (`LIM` or `LIM/INTERVAL/QUANTITY`, `12e5` allowed); 0 or none sets no limit.
+  // shortcut: a limit 0 is accepted as THORChain quotes it; 0.5% covers the shown figure's rounding.
+  const limit = /^(\d+)(?:e(\d{1,2}))?$/i.exec(limitField.split('/')[0])
+  if (minOut && limit) {
+    const [whole, fraction = ''] = minOut.split('.')
+    const shown = BigInt(whole + fraction.slice(0, 8).padEnd(8, '0'))
+    const set = BigInt(limit[1]) * 10n ** BigInt(limit[2] ?? 0)
+    if (set > 0n && set * 1000n < shown * 995n) throw new DepositError('The memo’s limit lets THORChain pay less than the minimum shown')
+  }
 }
 
 // --- Deposit transaction ---------------------------------------------------------------------------

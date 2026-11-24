@@ -875,6 +875,18 @@ test('a deposit memo must swap to the asked asset and pay the asked address with
   assert.throws(() => checkDepositMemo(`=:BASE.USDC:0x76ff6F88f58e083b88A80B1764ae7002e303D1A6:${'1'.repeat(40)}`, want), /longer/)
 })
 
+test('a deposit memo may not set a limit below the minimum shown', async () => {
+  const { checkDepositMemo } = await import('../src/lib/thorchain-deposit.ts')
+  const want = { buyAsset: 'BASE.USDC-0X833589FCD6EDB6E08F4C7C32D4F71B54BDA02913', destination: '0x76ff6F88f58e083b88A80B1764ae7002e303D1A6', minOut: '2.61106164' }
+  const memo = limit => `=:BASE.USDC:0x76ff6F88f58e083b88A80B1764ae7002e303D1A6:${limit}`
+  assert.doesNotThrow(() => checkDepositMemo(memo('261106164'), want))
+  assert.doesNotThrow(() => checkDepositMemo(memo('260000000/1/0'), want), 'within the shown figure’s rounding')
+  assert.doesNotThrow(() => checkDepositMemo(memo('0/1/0'), want), 'no limit, as THORChain quotes a streaming swap')
+  assert.throws(() => checkDepositMemo(memo('250000000'), want), /less than the minimum shown/)
+  assert.throws(() => checkDepositMemo(memo('25e7/3/0'), want), /less than the minimum shown/)
+  assert.doesNotThrow(() => checkDepositMemo(memo('250000000'), { ...want, minOut: undefined }))
+})
+
 test('a deposit pays only THORChain’s current, open BCH vault', async () => {
   const { checkInbound } = await import('../src/lib/thorchain-deposit.ts')
   const vault = otherBinding.cashAddress

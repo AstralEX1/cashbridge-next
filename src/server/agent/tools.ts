@@ -649,7 +649,7 @@ const depositOf = async (route: QuoteResponseRoute, destination: string, reverse
   let inbound: InboundAddress
   if (reverse) {
     try {
-      checkDepositMemo(route.memo, { buyAsset: route.buyAsset, destination })
+      checkDepositMemo(route.memo, { buyAsset: route.buyAsset, destination, minOut: route.expectedBuyAmountMaxSlippage })
       checkInbound(inbounds, route.inboundAddress, route.buyAsset.split('.')[0].toUpperCase())
     } catch (error) {
       throw new ToolError(`${error instanceof Error ? error.message : 'The deposit does not match its quote'}; ask for a new quote`)
@@ -758,7 +758,7 @@ const prepareBridge = async (args: Args, context: ToolContext) => {
       refundAddress: source
     })
     try {
-      checkDepositMemo(route.memo!, { buyAsset, destination })
+      checkDepositMemo(route.memo!, { buyAsset, destination, minOut: route.expectedBuyAmountMaxSlippage })
     } catch (error) {
       throw new ToolError(`${error instanceof Error ? error.message : 'The deposit does not match its quote'}; ask for a new quote`)
     }
@@ -1208,7 +1208,7 @@ const thorchainSaleLeg = async (bchOut: bigint, refund: string, buyAsset: string
   if (!isBridgeRoute(route, { sellAsset: BridgeConfig.buyAsset, buyAsset, destinationAddress: destination }))
     throw new ToolError('THORChain quoted a deposit that does not match this sale; nothing was sent')
   try {
-    checkDepositMemo(route.memo, { buyAsset, destination })
+    checkDepositMemo(route.memo, { buyAsset, destination, minOut: route.expectedBuyAmountMaxSlippage })
   } catch (error) {
     throw new ToolError(`${error instanceof Error ? error.message : 'The deposit does not match its quote'}; ask for a new quote`)
   }
