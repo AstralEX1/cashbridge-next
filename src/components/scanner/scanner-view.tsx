@@ -1,16 +1,19 @@
 'use client'
 
-import { ArrowLeftRight, ArrowUpRight, CircleCheck, LifeBuoy, LoaderCircle, Search, SearchX, Wallet, X, Zap } from 'lucide-react'
+import { useQuery } from '@tanstack/react-query'
+import { ArrowLeftRight, ArrowUpRight, CircleCheck, CircleDollarSign, LifeBuoy, LoaderCircle, LogIn, LogOut, Search, SearchX, TriangleAlert, Undo2, Wallet, X, Zap } from 'lucide-react'
 import Link from 'next/link'
 import { useEffect, useMemo, useState, useSyncExternalStore } from 'react'
 import { NumberTicker } from '@/components/landing/number-ticker'
 import { isScanAddress } from '@/lib/auto-bridge-contract'
 import { localWallets } from '@/lib/local-scan'
-import { chainIcon, chainName, hashLookups, matchesQuery } from '@/lib/scanner'
+import { chainIcon, chainName, directionOf, hashLookups, matchesQuery, rowUsd, type ScanDirection, type ScanRow, type ScanStatus } from '@/lib/scanner'
+import { getThorPools } from '@/lib/thorchain-api'
 import { autoBridgeStore } from '@/store/auto-bridge-store'
 import { transactionStore } from '@/store/transaction-store'
 import { LiveDot } from './live-dot'
 import { ScanList } from './scan-list'
+import { statusLabel } from './status-label'
 import { useScanFeed } from './use-scan-feed'
 import { useWalletScan } from './use-wallet-scan'
 
@@ -22,6 +25,40 @@ const FILTERS: [Filter, string, React.ReactNode][] = [
   ['router', 'Cashbridge Router', <Zap key="router" size={16} aria-hidden />],
   ['manual', 'Manual', <Wallet key="manual" size={16} aria-hidden />]
 ]
+const DIRECTIONS: [ScanDirection, string, React.ReactNode][] = [
+  ['in', 'Into Bitcoin Cash', <LogIn key="in" size={16} aria-hidden />],
+  ['out', 'Out of Bitcoin Cash', <LogOut key="out" size={16} aria-hidden />]
+]
+const STATUSES: [ScanStatus, React.ReactNode][] = [
+  ['completed', <CircleCheck key="completed" size={16} aria-hidden />],
+  ['pending', <LoaderCircle key="pending" size={16} aria-hidden />],
+  ['refunded', <Undo2 key="refunded" size={16} aria-hidden />],
+  ['review', <TriangleAlert key="review" size={16} aria-hidden />]
+]
+
+// Pills that each narrow the list to rows matching them, with how many rows each would show; pressing the active pill
+// shows all again.
+function Facets<T extends string>({ label, value, options, count, onChange }: {
+  label: string
+  value?: T
+  options: [T, string, React.ReactNode][]
+  count: (option: T) => number
+  onChange: (next?: T) => void
+}) {
+  return (
+    <div className="scanner-filters scanner-facets" role="group" aria-label={label}>
+      {options.map(([option, name, icon]) => {
+        const n = count(option)
+        return (
+          <button key={option} type="button" aria-pressed={value === option} aria-label={`${name}: ${n}`} title={name} disabled={!n && value !== option} onClick={() => onChange(value === option ? undefined : option)}>
+            {icon}
+            <span>{n}</span>
+          </button>
+        )
+      })}
+    </div>
+  )
+}
 
 const shortAddress = (address: string) => {
   const bare = address.replace(/^bitcoincash:/i, '')
@@ -39,6 +76,14 @@ export function ScannerView() {
   const { rows, now, live } = useScanFeed()
   const [query, setQuery] = useState('')
   const [filter, setFilter] = useState<Filter>('all')
+  const [direction, setDirection] = useState<ScanDirection>()
+  const [status, setStatus] = useState<ScanStatus>()
+  // THORChain's own price of BCH, for transfers with no dollar-stable side.
+  const { data: bchUsd } = useQuery({
+    queryKey: ['scanner-bch-usd'],
+    queryFn: async () => Number((await getThorPools()).find(pool => pool.asset === 'BCH.BCH')?.asset_tor_price) / 1e8 || null,
+    staleTime: 5 * 60_000
+  })
   // This browser's own wallets sit under the search; the server render has none.
   const hydrated = useSyncExternalStore(noSubscribe, () => true, () => false)
   const transactions = transactionStore(state => state.transactions)
@@ -69,14 +114,17 @@ export function ScannerView() {
   const walletRows = useWalletScan(address, rows)
   const searching = !!address
   const base = searching ? (walletRows ?? []) : rows
-  const shown = base.filter(row => (filter === 'all' || row.router === (filter === 'router')) && (searching || matchesQuery(row, query)))
+  const matched = base.filter(row => (filter === 'all' || row.router === (filter === 'router')) && (searching || matchesQuery(row, query)))
+  const inDirection = (row: ScanRow) => !direction || directionOf(row) === direction
+  const inStatus = (row: ScanRow) => !status || row.status === status
+  const shown = matched.filter(row => inDirection(row) && inStatus(row))
+  const moved = Math.round(base.reduce((sum, row) => sum + (rowUsd(row, bchUsd ?? undefined) ?? 0), 0))
   const loading = (searching && !walletRows) || (!!text && isScanAddress(text) && address !== text)
   const lookups = shown.length || searching ? [] : hashLookups(query)
   const chains = [...new Set(base.flatMap(row => [row.from.chain, row.to.chain]))]
   const stats: [string, React.ReactNode, number][] = [
     ['Transfers', <ArrowLeftRight key="all" size={18} aria-hidden />, base.length],
-    ['Router', <Zap key="router" size={18} aria-hidden />, base.filter(row => row.router).length],
-    ['Settled', <CircleCheck key="done" size={18} aria-hidden />, base.filter(row => row.status === 'completed').length]
+    ['Router', <Zap key="router" size={18} aria-hidden />, base.filter(row => row.router).length]
   ]
 
   return (
@@ -103,6 +151,15 @@ export function ScannerView() {
             </dd>
           </div>
         ))}
+        <div title="Dollar-stable sides at face value, BCH at THORChain's price">
+          <dt>
+            <CircleDollarSign size={18} aria-hidden />
+            <span>Moved</span>
+          </dt>
+          <dd>
+            $<NumberTicker value={moved} />
+          </dd>
+        </div>
         <div>
           <dt>
             <span>Chains</span>
@@ -149,6 +206,17 @@ export function ScannerView() {
             </button>
           ))}
         </div>
+      </div>
+
+      <div className="scanner-tools scanner-tools--facets">
+        <Facets label="Filter by direction" value={direction} options={DIRECTIONS} count={d => matched.filter(row => directionOf(row) === d && inStatus(row)).length} onChange={setDirection} />
+        <Facets
+          label="Filter by status"
+          value={status}
+          options={STATUSES.map(([s, icon]) => [s, statusLabel(s), icon])}
+          count={s => matched.filter(row => row.status === s && inDirection(row)).length}
+          onChange={setStatus}
+        />
       </div>
 
       {!query && wallets.length > 0 && (

@@ -2,7 +2,7 @@ import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 import { test } from 'node:test'
 import { RUNS } from '../src/lib/mainnet-runs.ts'
-import { explorerIcon, hashLookups, matchesQuery, rowFromOrder, rowFromRun, rowsFromThorchain, SCAN_START, scanRows, walletRows } from '../src/lib/scanner.ts'
+import { directionOf, explorerIcon, hashLookups, rowUsd, matchesQuery, rowFromOrder, rowFromRun, rowsFromThorchain, SCAN_START, scanRows, walletRows } from '../src/lib/scanner.ts'
 import { FEATURED_TOKENS } from '../src/lib/cauldron-tokens.ts'
 
 const PUSD = FEATURED_TOKENS[0]
@@ -188,4 +188,17 @@ test('Bitcoin Cash links open an explorer that names CashTokens; other chains ke
   assert.match(explorerTxUrl({ chain: 'ETH', txHash: 'ab'.repeat(32) }), /^https:\/\/etherscan\.io\/tx\/0x/)
   for (const run of RUNS) for (const [, url] of run.links) assert.doesNotMatch(url, /blockchair\.com\/bitcoin-cash/)
   assert.equal(explorerIcon(`https://explorer.selene.cash/tx/${'ab'.repeat(32)}`), explorerIcon('https://www.blockchair.com/bitcoin-cash/transaction/x'))
+})
+
+test('a transfer counts into or out of Bitcoin Cash, and its dollar value comes from a stable side, else its BCH side', () => {
+  const side = (ticker, chain, amount) => ({ ticker, chain, amount })
+  const forward = { from: side('USDC', 'BASE', '20'), to: side('PUSD', 'BCH', '19.6') }
+  const back = { from: side('BCH', 'BCH', '0.05'), to: side('ETH', 'ETH', '0.0007') }
+  assert.equal(directionOf(forward), 'in')
+  assert.equal(directionOf(back), 'out')
+  assert.equal(directionOf({ from: side('ETH', 'ETH'), to: side('BTC', 'BTC') }), undefined)
+  assert.equal(rowUsd(forward), 20, 'the stable side, at face value')
+  assert.equal(rowUsd(back, 400), 20)
+  assert.equal(rowUsd(back), undefined, 'no BCH price, no value')
+  assert.equal(rowUsd({ from: side('ETH', 'ETH', '1'), to: side('MUSD', 'BCH') }), undefined, 'a stable side with no amount is not a value')
 })
