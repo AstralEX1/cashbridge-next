@@ -76,6 +76,22 @@ test('the EVM provider skips a node that serves another chain and rotates past a
   assert.ok(calls.some(([url, method]) => url === good && method === 'eth_blockNumber'))
 })
 
+test('an EVM node whose chain check got an error answer is checked again, not dropped for the visit', async t => {
+  const { getProvider } = await import('../src/lib/evm-rpc.ts')
+  let blip = true
+  t.mock.method(globalThis, 'fetch', async (_url, init) => {
+    const { method, id } = JSON.parse(init.body)
+    if (method !== 'eth_chainId') return Response.json({ jsonrpc: '2.0', id, result: '0x2a' })
+    return Response.json(blip ? { jsonrpc: '2.0', id: 1, error: { code: -32603, message: 'internal error' } } : { jsonrpc: '2.0', id: 1, result: '0xc4' })
+  })
+  const provider = await getProvider('XLAYER')
+  await assert.rejects(provider.getBlockNumber())
+  blip = false
+  // ethers keeps a call's answer for 250 ms.
+  await new Promise(resolve => setTimeout(resolve, 300))
+  assert.equal(await provider.getBlockNumber(), 42)
+})
+
 test('the Solana proxy passes a refused call to the next node and returns its answer', async t => {
   const { POST } = await import('../src/app/api/solana/route.ts')
   const { SOLANA_RPC_URLS } = await import('../src/lib/endpoints.ts')
