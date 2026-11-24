@@ -77,12 +77,15 @@ const returnOnce = (reference: SavedAutoOrder, order: PublicOrder) =>
     console.warn('The page could not send the BCH back yet:', error instanceof Error ? error.message : error))
 
 export type OrderPollSchedule = Map<string, { at: number; attempted: boolean; failed: boolean }>
+// A finished order with nothing left at its contract, a day after its last change: nothing more can happen to it.
+const SETTLED_KEEP_POLLING_MS = 24 * 60 * 60_000
 
 export async function pollAutomaticOrders(nextPoll: OrderPollSchedule, stopped: () => boolean) {
   let failed = false
   for (const reference of autoBridgeStore.getState().orders) {
     if (stopped()) break
     if (creating.has(reference.id)) continue
+    if (reference.order && pageKeySpent(reference.order) && Date.now() - reference.order.updatedAt > SETTLED_KEEP_POLLING_MS) continue
     const deferred = nextPoll.get(reference.id)
     if (deferred && deferred.at > Date.now() && deferred.attempted === !!reference.sourceAttempted) {
       failed ||= deferred.failed

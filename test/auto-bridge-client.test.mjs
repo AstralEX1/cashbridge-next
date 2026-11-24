@@ -69,6 +69,14 @@ test('terminal automatic orders refresh late custody and payout warnings on a bo
   assert.equal(autoBridgeStore.getState().orders[0].order.error, response.error)
   await pollAutomaticOrders(schedule, () => true)
   assert.equal(calls, 2)
+  // Settled with nothing left at the contract: asked again for a day after its last change, then never.
+  response = { ...response, recoverySats: '0', error: undefined, updatedAt: now }
+  now += 300001
+  await pollAutomaticOrders(schedule, () => false)
+  assert.equal(calls, 3)
+  now += 24 * 60 * 60_000
+  await pollAutomaticOrders(schedule, () => false)
+  assert.equal(calls, 3)
 })
 
 test('the page key leaves browser storage once its order is done with no BCH left at the contract, and stays gone', async t => {
