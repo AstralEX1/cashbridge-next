@@ -361,12 +361,12 @@ export const AutomaticOrderDialog = ({ id, isOpen, onOpenChange }: { id: string;
       : firstDone
       ? <WaitingButton>{tb('progress.swapping')}</WaitingButton>
       : <WaitingButton>{tb('progress.swapAction', { ticker: token.ticker })}</WaitingButton>
-  const title = receipt ? tb('progress.completeTitle') : firstDone ? tb('progress.swapping') : tb('progress.processing')
+  const title = receipt ? tb('progress.completeTitle') : firstDone ? tb('progress.swapping') : exchangeWaiting ? t('exchange.title') : tb('progress.processing')
 
   return <Dialog open={isOpen} onOpenChange={onOpenChange}>
     <DialogContent className="bridge-flow-layer" showCloseButton={false}>
       <DialogTitle className="sr-only">{title}</DialogTitle>
-      <DialogDescription className="sr-only">{t('automaticHint')}</DialogDescription>
+      <DialogDescription className="sr-only">{exchangeWaiting ? t('exchange.steps', { ticker: token.ticker }) : t('automaticHint')}</DialogDescription>
       <BridgeFlow
         stage={stage}
         title={title}
