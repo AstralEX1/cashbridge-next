@@ -290,8 +290,9 @@ export class OrderStore {
         .prepare('UPDATE orders SET state=?, version=?, payload=? WHERE id=? AND version=?')
         .run(order.state, order.version, JSON.stringify(order), id, version).changes === 1
     )
-    // Polling bookkeeping alone does not need the stale-restore guard; it would open the crash window every pass.
-    this.dirty ||= changed && Object.keys(allowed).some(name => name !== 'lastCheckedAt')
+    // Polling bookkeeping alone (the check time, or a field written again with the value it had) does not need the
+    // stale-restore guard; it would open the crash window every pass.
+    this.dirty ||= changed && (Object.keys(allowed) as (keyof Patch)[]).some(name => name !== 'lastCheckedAt' && JSON.stringify(allowed[name]) !== JSON.stringify(old[name]))
     return changed
     })
   }

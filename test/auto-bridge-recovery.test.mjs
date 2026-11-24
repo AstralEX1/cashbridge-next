@@ -191,6 +191,26 @@ test('status polling does not exhaust the public write bucket', async () => {
   } finally { if (old === undefined) delete process.env.AUTO_BRIDGE_SOCKET; else process.env.AUTO_BRIDGE_SOCKET = old }
 })
 
+test('a pass that writes the same observation again leaves the stale-restore guard alone', () => {
+  const directory = mkdtempSync(join(tmpdir(), 'cashbridge-guard-same-'))
+  const path = join(directory, 'orders.sqlite')
+  const env = setup(path)
+  const guard = () => readFileSync(`${path}.guard`, 'utf8').trim()
+  const observedFunding = [{ txid: 'cd'.repeat(32), vout: 0, value: '1000000', confirmations: 0, unspent: true }]
+  try {
+    assert.equal(env.store.update(env.id, env.store.get(env.id).version, { observedFunding, lastCheckedAt: 1 }), true)
+    const after = guard()
+    assert.equal(env.store.update(env.id, env.store.get(env.id).version, { observedFunding, lastCheckedAt: 2, error: undefined }), true)
+    assert.equal(guard(), after, 'nothing new: no guard write')
+    assert.equal(env.store.get(env.id).lastCheckedAt, 2)
+    assert.equal(env.store.update(env.id, env.store.get(env.id).version, { observedFunding: [{ ...observedFunding[0], confirmations: 1 }], lastCheckedAt: 3 }), true)
+    assert.notEqual(guard(), after, 'a real change still moves the guard')
+  } finally {
+    env.store.close()
+    rmSync(directory, { recursive: true, force: true })
+  }
+})
+
 test('a failed commit does not leave the guard ahead of the database', () => {
   const directory = mkdtempSync(join(tmpdir(), 'cashbridge-guard-error-'))
   const path = join(directory, 'orders.sqlite')
