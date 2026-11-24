@@ -11,6 +11,7 @@ import { Asset } from '@/components/swap/asset'
 import { SwapButton } from '@/components/swap/swap-button'
 import { ReverseSwapButton } from '@/components/swap/reverse-bridge'
 import { BchInputFrom, ReverseInputTo } from '@/components/swap/reverse-inputs'
+import { BchSwapButton, BchSwapInputTo } from '@/components/swap/bch-swap'
 import { BackgroundBridges, BchWalletStatus, BridgeOperationPanel } from '@/components/swap/pusd-swap'
 import { SwapHaltBanner } from '@/components/swap/swap-halt-banner'
 import { SwapInputFrom } from '@/components/swap/swap-input-from'
@@ -46,6 +47,7 @@ const DEFAULT_REVERSE_TARGETS = ['BASE.USDC-0X833589FCD6EDB6E08F4C7C32D4F71B54BD
 
 export const Swap = () => {
   const tBridge = useTranslations('bridge.form')
+  const tOnBch = useTranslations('bridge.onBch')
   const { automatic } = useAutomaticBridge()
   const [picker, setPicker] = useState<'from' | 'to'>()
   const activeBridge = useActiveBridge()
@@ -60,6 +62,8 @@ export const Swap = () => {
   const pairKey = useSwapStore(state => `${state.assetFrom?.identifier}|${state.assetTo?.identifier}`)
   const reverse = useSwapStore(state => state.reverse)
   const openNetworks = useSwapStore(state => state.openNetworks)
+  // Back from BCH into a Bitcoin Cash asset: a Cauldron swap that never leaves Bitcoin Cash.
+  const onBch = useSwapStore(state => !state.openNetworks && state.reverse && state.localTo !== undefined)
   const toggleDirection = useSwapStore(state => state.swapAssets)
   const assetFrom = useSwapStore(state => state.assetFrom)
   const { assets } = useAssets()
@@ -129,7 +133,7 @@ export const Swap = () => {
   return (
     <div className="bridge-widget mx-auto w-full max-w-[514px]">
       <div className="bridge-heading">
-        <h1>{tBridge(openNetworks ? 'headingOpen' : reverse ? 'headingReverse' : 'heading')}</h1>
+        <h1>{onBch ? tOnBch('heading') : tBridge(openNetworks ? 'headingOpen' : reverse ? 'headingReverse' : 'heading')}</h1>
       </div>
       {/* One row: Manual/Router, then refresh/settings. Any network lives in the BCH asset picker. */}
       <div className="bridge-tools mb-3 flex flex-nowrap items-center gap-2 overflow-x-auto">
@@ -166,12 +170,16 @@ export const Swap = () => {
         </div>
         {openNetworks || !reverse ? (
           <SwapInputTo selecting={picker === 'to'} onSelectOpenChange={open => setPicker(open ? 'to' : undefined)} />
+        ) : onBch ? (
+          <BchSwapInputTo selecting={picker === 'to'} onSelectOpenChange={open => setPicker(open ? 'to' : undefined)} />
         ) : (
           <ReverseInputTo selecting={picker === 'to'} onSelectOpenChange={open => setPicker(open ? 'to' : undefined)} />
         )}
       </div>
-      <RouteCompare />
-      {!openNetworks && reverse ? (
+      {!onBch && <RouteCompare />}
+      {onBch ? (
+        <BchSwapButton />
+      ) : !openNetworks && reverse ? (
         <ReverseSwapButton onShowBridge={() => setProgressId(getActiveBridge()?.uid)} />
       ) : (
         <SwapButton instantSwapSupported={openNetworks} instantSwapAvailable={openNetworks} onShowBridge={() => setProgressId(getActiveBridge()?.uid)} />

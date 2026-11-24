@@ -1015,6 +1015,14 @@
       "unavailable": "No quote for this amount",
       "halted": "Paused on THORChain",
       "gas": "Gas to send: {usd}, already taken off the amount"
+    },
+    "onBch": {
+      "heading": "Swap on Bitcoin Cash",
+      "route": "Cauldron · one signature · no bridge",
+      "swapped": "Swapped · {amount} {ticker}",
+      "view": "View transaction",
+      "again": "New swap",
+      "failed": "The swap did not go through: {reason}"
     }
   },
   "automatic": {

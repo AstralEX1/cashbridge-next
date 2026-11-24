@@ -1006,6 +1006,14 @@
       "unavailable": "Нет котировки для этой суммы",
       "halted": "Приостановлено в THORChain",
       "gas": "Gas за отправку: {usd}, уже вычтен из суммы"
+    },
+    "onBch": {
+      "heading": "Обмен на Bitcoin Cash",
+      "route": "Cauldron · одна подпись · без моста",
+      "swapped": "Обмен отправлен · {amount} {ticker}",
+      "view": "Открыть транзакцию",
+      "again": "Новый обмен",
+      "failed": "Обмен не прошёл: {reason}"
     }
   },
   "automatic": {
