@@ -191,6 +191,12 @@ test('status polling does not exhaust the public write bucket', async () => {
   } finally { if (old === undefined) delete process.env.AUTO_BRIDGE_SOCKET; else process.env.AUTO_BRIDGE_SOCKET = old }
 })
 
+test('the order proxy refuses a body over 4096 bytes before calling the Router', async () => {
+  const response = await forwardOrder(req({ note: 'a'.repeat(4096) }, randomBytes(32).toString('hex')))
+  assert.equal(response.status, 413)
+  assert.deepEqual(await response.json(), { error: 'Request body too large' })
+})
+
 test('a pass that writes the same observation again leaves the stale-restore guard alone', () => {
   const directory = mkdtempSync(join(tmpdir(), 'cashbridge-guard-same-'))
   const path = join(directory, 'orders.sqlite')

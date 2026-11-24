@@ -3,6 +3,7 @@ import { request as secureRequest } from 'node:https'
 import { NextRequest, NextResponse } from 'next/server'
 import { clientIp, rateLimit } from '@/lib/rate-limit'
 import { isSameOrigin } from '@/lib/same-origin'
+import { readRequestBody } from '@/lib/request-body'
 import { isFeedOrder, type FeedOrder } from '@/lib/auto-bridge-contract'
 
 // Under the browser's 15 s request timeout, so the page gets this answer rather than giving up first.
@@ -19,28 +20,16 @@ export async function forwardOrder(req: NextRequest, id?: string) {
   if (rateLimit(req, req.method === 'POST' ? 'automatic-proxy-write' : 'automatic-proxy-read', req.method === 'POST' ? 10 : 600) !== null)
     return failure(429, 'Too many order requests')
   try {
-    const chunks: Uint8Array[] = []
-    let size = 0
-    const reader = req.body?.getReader()
-    if (reader)
-      while (true) {
-        const next = await reader.read()
-        if (next.done) break
-        size += next.value.length
-        if (size > 4096) {
-          await reader.cancel()
-          return failure(413, 'Request body too large')
-        }
-        chunks.push(next.value)
-      }
-    const body = Buffer.concat(chunks)
+    const body = await readRequestBody(req, 4096)
+    // A body that breaks off mid-read gets the same answer as a Router that fails.
+    if (typeof body !== 'string') return body.status === 413 ? failure(413, 'Request body too large') : failure(503, 'Cashbridge Router is unavailable')
     const upstreamHeaders: Record<string, string> = {
       authorization: req.headers.get('authorization')!,
       'content-type': 'application/json',
       'sec-fetch-site': 'same-origin'
     }
     if (ip) upstreamHeaders['cf-connecting-ip'] = ip
-    const response = await callWorker(req.method, `/orders${id ? `/${id}` : ''}`, upstreamHeaders, body)
+    const response = await callWorker(req.method, `/orders${id ? `/${id}` : ''}`, upstreamHeaders, Buffer.from(body))
     if (!response) return failure(503, 'Automatic bridge transport is not configured')
     return new NextResponse(response.body.toString('utf8'), { status: response.status, headers })
   } catch {
