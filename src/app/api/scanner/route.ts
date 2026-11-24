@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { isScanAddress } from '@/lib/auto-bridge-contract'
-import { rateLimit } from '@/lib/rate-limit'
+import { clientIp, rateLimit } from '@/lib/rate-limit'
 import { readOrderFeed } from '@/server/auto-bridge/proxy'
 
 export const runtime = 'nodejs'
@@ -16,7 +16,7 @@ export async function GET(req: NextRequest) {
     if (!isScanAddress(address)) return NextResponse.json({ error: 'Invalid address' }, { status: 400 })
     if (rateLimit(req, 'scanner-address', 60) !== null) return NextResponse.json({ error: 'Too many requests' }, { status: 429 })
   }
-  const orders = (await readOrderFeed(address)) ?? null
+  const orders = (await readOrderFeed(address, clientIp(req))) ?? null
   return NextResponse.json(
     { orders },
     { headers: { 'Cache-Control': orders ? 'public, s-maxage=30, stale-while-revalidate=120' : 'public, s-maxage=10' } }

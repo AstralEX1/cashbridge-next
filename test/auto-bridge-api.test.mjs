@@ -190,6 +190,31 @@ test('the public scanner feed lists paid orders from the worker without addresse
   }
 })
 
+test('the scanner feed reaches the Router as the asking client, so one visitor cannot use up everyone\'s reads', async () => {
+  const { createServer } = await import('node:http')
+  const directory = mkdtempSync(join(tmpdir(), 'cashbridge-feed-ip-')),
+    path = join(directory, 'worker.sock')
+  const previous = process.env.AUTO_BRIDGE_SOCKET
+  process.env.AUTO_BRIDGE_SOCKET = path
+  const seen = []
+  const server = createServer((req, res) => {
+    seen.push(req.headers['cf-connecting-ip'])
+    res.setHeader('content-type', 'application/json')
+    res.end(JSON.stringify({ orders: [] }))
+  })
+  await new Promise(resolve => server.listen(path, resolve))
+  try {
+    await scannerFeed(new NextRequest('https://bridge.example/api/scanner', { headers: { 'cf-connecting-ip': '198.51.100.7' } }))
+    await scannerFeed(new NextRequest(`https://bridge.example/api/scanner?address=${encodeURIComponent(bindingFromPubkey(pubkey, 0).cashAddress)}`, { headers: { 'cf-connecting-ip': '198.51.100.8' } }))
+    assert.deepEqual(seen, ['198.51.100.7', '198.51.100.8'])
+  } finally {
+    await new Promise(resolve => server.close(resolve))
+    rmSync(directory, { recursive: true, force: true })
+    if (previous === undefined) delete process.env.AUTO_BRIDGE_SOCKET
+    else process.env.AUTO_BRIDGE_SOCKET = previous
+  }
+})
+
 test('a NEAR Intents deposit address is noted once, before the source hash, only when the Router takes NEAR orders, contract ones too', async () => {
   const signer = new WorkerWallet(encodeHdPrivateKey({ network: 'mainnet', node: deriveHdPrivateNodeFromSeed(randomBytes(32)) }).hdPrivateKey)
   const address = bindingFromPubkey(pubkey, 0).cashAddress

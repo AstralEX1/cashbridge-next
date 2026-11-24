@@ -93,10 +93,11 @@ export async function callWorker(method: string, path: string, headers: Record<s
 }
 
 // The Router's newest orders for the public scanner, or with `address` that wallet's orders; undefined when the
-// worker cannot be read, predates the feed, or (for an address) did not apply the filter.
-export async function readOrderFeed(address?: string): Promise<FeedOrder[] | undefined> {
+// worker cannot be read, predates the feed, or (for an address) did not apply the filter. `ip` is the asking client's,
+// so the Router's read limit counts each visitor apart.
+export async function readOrderFeed(address: string | undefined, ip: string): Promise<FeedOrder[] | undefined> {
   try {
-    const response = await callWorker('GET', address ? `/orders?address=${encodeURIComponent(address)}` : '/orders', { 'sec-fetch-site': 'same-origin' })
+    const response = await callWorker('GET', address ? `/orders?address=${encodeURIComponent(address)}` : '/orders', { 'sec-fetch-site': 'same-origin', 'cf-connecting-ip': ip })
     if (response?.status !== 200) return undefined
     const body = JSON.parse(response.body.toString('utf8'))
     if (address && body?.address !== address) return undefined
