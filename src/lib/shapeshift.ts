@@ -209,6 +209,8 @@ export const shapeShiftRoute = (
 }
 
 const MAX_SWAPPERS_TRIED = 3
+// The least time a NEAR leg's refund deadline may leave to sign and send.
+const MIN_DEADLINE_MS = 10 * 60_000
 
 // A valid address on the asset's chain for a dry quote (1Click's placeholders); undefined where none is kept.
 const dryAddress = (identifier: string) => {
@@ -303,6 +305,8 @@ export const shapeShiftNearLeg = async (route: ShapeShiftRoute, expect: { recipi
     same(request.refundTo, expect.refundTo) &&
     quote.amountIn === toBaseUnits(route.sellAmount, origin.decimals).toString()
   if (!ok) throw new Error('ShapeShift’s quote does not match this transfer')
+  // The user still has to sign and send; a deposit after the deadline is refunded.
+  if (!(Date.parse(request!.deadline ?? '') - Date.now() >= MIN_DEADLINE_MS)) throw new Error('ShapeShift’s quote runs out too soon to send')
   const leg: NearLeg = {
     depositAddress,
     correlationId: status.correlationId!,
@@ -327,7 +331,15 @@ export const getShapeShiftBridgeRoute = async (
   const route = await getShapeShiftQuote(req, signal)
   if (!route) return undefined
   const { leg, seconds } = await shapeShiftNearLeg(route, { recipient: req.destinationAddress, refundTo: req.sourceAddress })
-  return { ...route, ...(seconds && { estimatedTime: { total: seconds } }), shapeshift: { ...route.shapeshift, near: leg } }
+  // "At least" is what 1Click's signed quote enforces when that is below ShapeShift's figure.
+  const shown = toBaseUnits(route.expectedBuyAmountMaxSlippage!, req.buyDecimals)
+  const enforced = BigInt(leg.minAmountOut)
+  return {
+    ...route,
+    ...(enforced < shown && { expectedBuyAmountMaxSlippage: formatBaseUnits(enforced, req.buyDecimals) }),
+    ...(seconds && { estimatedTime: { total: seconds } }),
+    shapeshift: { ...route.shapeshift, near: leg }
+  }
 }
 
 export type ShapeShiftSwapStatus = 'pending' | 'submitted' | 'confirmed' | 'failed'
