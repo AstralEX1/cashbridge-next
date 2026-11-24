@@ -82,6 +82,12 @@
     background: var(--label-menu-hover);
   }
 }
+.bridge-card,
+.bridge-confirm-dialog {
+  /* The shared price-impact orange and red are made for dark surfaces; these reach 4.5:1 on the light card. */
+  --jacob: #a85a00;
+  --lucian: #d40d00;
+}
 .bridge-card {
   padding: 24px;
   border-radius: 36px;
@@ -159,12 +165,20 @@
 .bridge-pill img {
   flex-shrink: 0;
 }
-/* Keyboard focus: a soft ring that follows each control's rounding, not a square outline. */
+/* Keyboard focus: a ring that follows each control's rounding, not a square outline, dark with a light gap
+   so it reads on the card (light on the dark page around it). */
 .bridge-widget :is(button, input, summary, a):focus-visible {
   outline: none;
 }
 .bridge-widget :is(button, summary, a):focus-visible {
-  box-shadow: 0 0 0 3px #0f182024;
+  box-shadow:
+    0 0 0 2px #f8fdff,
+    0 0 0 4px #0f1820;
+}
+.bridge-page .bridge-tools :is(button, a):focus-visible {
+  box-shadow:
+    0 0 0 2px #0f1820,
+    0 0 0 4px #f8fdff;
 }
 /* The press feedback moves only the pill behind the label: transform and opacity transition on the
    compositor, while the variables below just switch with the state. */
@@ -402,10 +416,6 @@
 .bridge-direction:disabled {
   cursor: default;
   opacity: 0.5;
-}
-.bridge-direction:focus-visible {
-  outline: 2px solid #0ac18e;
-  outline-offset: 2px;
 }
 @media (hover: hover) {
   .bridge-direction:not(:disabled):hover {
@@ -1770,6 +1780,10 @@ button.bridge-flow-primary:disabled {
   outline: 2px solid #0ac18e;
   outline-offset: 2px;
 }
+/* Green is 2.3:1 on the light card; the page around it keeps the green ring. */
+.bridge-flow-card :is(button, a):focus-visible {
+  outline-color: #0f1820;
+}
 
 @media (max-width: 520px) {
   .bridge-flow-corner {
@@ -2165,6 +2179,8 @@ button.bridge-flow-primary:disabled {
 .bridge-auto-recipient input[aria-invalid='true'] { outline: 1px solid #bd493e; }
 .bridge-paste-error { margin: 6px 0 0; color: #bd493e; font-size: 12px; font-weight: 600; }
 .bridge-auto-orders { display: grid; gap: 8px; margin-top: 20px; color: #c4d2d6; }
+/* On the dark page the card's grey message would be 2.3-3.4:1; this is the one "do not send again" warning. */
+.bridge-auto-orders > .bridge-flow-message { padding: 10px 14px; border-radius: 14px; background: #e0a32e1a; color: #f1d08a; }
 /* A running order under the form: sent coin, state, bought token - the same card as a finished transfer. */
 .bridge-auto-card {
   display: grid;
