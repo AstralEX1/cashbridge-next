@@ -470,8 +470,10 @@ export const checkPayment = (raw: RawTx, lockingBytecode: string, { tip, utxos }
 // Watches the bound address itself: THORChain's outbound for `inboundHash` among its unspent
 // outputs (mempool included), found by the OUT:<inbound hash> memo (REFUND:<hash> for a refund of
 // a BCH deposit) and checked like any outbound. Lets the BCH count as arrived without waiting for
-// THORNode or the tracker to report it.
-export const findThorchainOutbound = (inboundHash: string, lockingBytecode: string, action: 'OUT' | 'REFUND' = 'OUT'): Promise<ReceiptCheck> =>
+// THORNode or the tracker to report it. Deposit hashes are public, so anyone can copy the memo: the
+// payment counts only when it spends a coin of one of `vaultScripts` (THORChain's BCH vault), which only
+// THORChain can sign for.
+export const findThorchainOutbound = (inboundHash: string, lockingBytecode: string, action: 'OUT' | 'REFUND', vaultScripts: string[]): Promise<ReceiptCheck> =>
   withElectrum(async client => {
     const unspent = await fetchUnspent(client, lockingBytecode)
     // Newest first: the outbound is the latest payment, unconfirmed ones (height 0) before any block.
@@ -482,7 +484,11 @@ export const findThorchainOutbound = (inboundHash: string, lockingBytecode: stri
       const script = hexToBin(lockingBytecode)
       const paid = raw.tx.outputs.reduce((sum, o) => (binsAreEqual(o.lockingBytecode, script) ? sum + o.valueSatoshis : sum), 0n)
       const check = checkOutbound(raw, { inboundHash, lockingBytecode, expectedSats: paid, action }, unspent)
-      if (check.kind === 'ok') return check
+      if (check.kind !== 'ok') continue
+      const input = raw.tx.inputs[0]
+      const funding = input && (await fetchRawTx(client, binToHex(input.outpointTransactionHash)))
+      const from = funding?.tx.outputs[input.outpointIndex]?.lockingBytecode
+      if (from && vaultScripts.includes(binToHex(from))) return check
     }
     return { kind: 'not_found' }
   })

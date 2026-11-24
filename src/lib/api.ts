@@ -310,6 +310,24 @@ export const getInboundAddresses = () => {
   return USwapApi.thornode.getInboundAddresses()
 }
 
+// The locking scripts of THORChain's BCH vault, the only signer of its payouts and refunds. Kept a few minutes: the
+// vault changes only at a churn.
+// shortcut: the active vault only; a payment from a retiring one during a churn waits for THORNode's report instead.
+let bchVaults: { at: number; scripts: Promise<string[]> } | undefined
+export const thorchainBchVaultScripts = () => {
+  if (!bchVaults || Date.now() - bchVaults.at > 5 * 60_000) {
+    const scripts = getInboundAddresses().then(list =>
+      (list as unknown as { chain: string; address: string }[])
+        .filter(inbound => inbound.chain === 'BCH')
+        .map(inbound => addressToLockingBytecode(inbound.address))
+        .filter((script): script is string => !!script)
+    )
+    bchVaults = { at: Date.now(), scripts }
+    scripts.catch(() => (bchVaults = undefined))
+  }
+  return bchVaults.scripts
+}
+
 export interface LimitSwapQueueItem {
   swap: {
     tx: {

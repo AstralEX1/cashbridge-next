@@ -1038,3 +1038,40 @@ test('price impact is the whole loss: slippage, or the value lost to fixed fees 
   assert.equal(resolvePriceImpact(quote('0.73', 19)).toSignificant(4), '0.19', 'without rates only slippage is known')
   assert.equal(resolvePriceImpact(quote('0.9', undefined), usd(1), usd(1)).toSignificant(4), '10')
 })
+
+test('a copied OUT: memo does not count as THORChain’s payment: only a spend of its vault’s coin does', async t => {
+  const { findThorchainOutbound } = await import('../src/lib/bch.ts')
+  const realWebSocket = globalThis.WebSocket
+  t.after(() => (globalThis.WebSocket = realWebSocket))
+  const vault = otherBinding.lockingBytecode
+  const stranger = `76a914${'22'.repeat(20)}88ac`
+  const memo = `OUT:${inboundHash}`
+  const opReturn = text => Uint8Array.from([0x6a, text.length, ...new TextEncoder().encode(text)])
+  const fundedBy = script => binToHex(encodeTransaction({ version: 2, locktime: 0, inputs: [{ outpointTransactionHash: hexToBin('11'.repeat(32)), outpointIndex: 0, sequenceNumber: 0, unlockingBytecode: Uint8Array.of(0) }], outputs: [{ lockingBytecode: hexToBin(script), valueSatoshis: 2_000_000n }] }))
+  const payout = prevHex => binToHex(encodeTransaction({ version: 2, locktime: 0, inputs: [{ outpointTransactionHash: hexToBin(txidOf(prevHex)), outpointIndex: 0, sequenceNumber: 0, unlockingBytecode: Uint8Array.of(0) }], outputs: [{ lockingBytecode: hexToBin(binding.lockingBytecode), valueSatoshis: 1_000_000n }, { lockingBytecode: opReturn(memo), valueSatoshis: 0n }] }))
+  const run = async payer => {
+    const prev = fundedBy(payer)
+    const paid = payout(prev)
+    const txs = { [txidOf(prev)]: prev, [txidOf(paid)]: paid }
+    const answers = {
+      'server.version': () => ['Fulcrum', '1.5'],
+      'blockchain.headers.subscribe': () => ({ height: 100 }),
+      'blockchain.scripthash.listunspent': () => [{ tx_hash: txidOf(paid), tx_pos: 0, value: 1_000_000, height: 0 }],
+      'blockchain.transaction.get': ([hash]) => txs[hash]
+    }
+    globalThis.WebSocket = class {
+      static OPEN = 1
+      readyState = 0
+      constructor() { queueMicrotask(() => { this.readyState = 1; this.onopen?.() }) }
+      send(data) {
+        const { id, method, params } = JSON.parse(data)
+        const result = answers[method]?.(params)
+        queueMicrotask(() => this.onmessage?.({ data: JSON.stringify(result === undefined ? { jsonrpc: '2.0', id, error: { code: 2, message: 'not found' } } : { jsonrpc: '2.0', id, result }) }))
+      }
+      close() { this.readyState = 3; this.onclose?.() }
+    }
+    return findThorchainOutbound(inboundHash, binding.lockingBytecode, 'OUT', [vault])
+  }
+  assert.equal((await run(vault)).kind, 'ok')
+  assert.equal((await run(stranger)).kind, 'not_found', 'the same memo and amount from anyone else')
+})

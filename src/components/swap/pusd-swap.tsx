@@ -22,7 +22,7 @@ import { SwapError } from '@/components/swap/swap-error'
 import { BridgeConfig } from '@/config'
 import { useQuote } from '@/hooks/use-quote'
 import { useRates } from '@/hooks/use-rates'
-import { getMidgardActions, getTrack, getTxStatus } from '@/lib/api'
+import { getMidgardActions, getTrack, getTxStatus, thorchainBchVaultScripts } from '@/lib/api'
 import { checkUnspent, findThorchainOutbound, getTransactionState, historyIncludes, verifyPayments, verifyThorchainOutbound } from '@/lib/bch'
 import { getNearStatus, interpretNearStatus, nearExplorerUrl, nudgeNearDeposit } from '@/lib/near-intents'
 import { sourceTransactionId } from '@/lib/source-transaction'
@@ -226,7 +226,7 @@ const syncFirstLeg = async (tx: BridgeTx, update: ReturnType<typeof useUpdateBri
   // fills gaps (refunds, timing) and never holds a stage back.
   const [source, outbound] = await Promise.all([
     sourceReceipt(tx).catch(() => undefined),
-    findThorchainOutbound(tx.hash, op.binding.lockingBytecode).catch(() => undefined)
+    thorchainBchVaultScripts().then(vaults => findThorchainOutbound(tx.hash!, op.binding.lockingBytecode, 'OUT', vaults)).catch(() => undefined)
   ])
   const fromChain = firstLegFromChain(op, { source, outbound })
   if (fromChain) update(tx.uid, () => fromChain)

@@ -52,7 +52,7 @@ import { type ReviewedSwap } from '@/lib/cauldron'
 import { SignCancelled, SignDeclined, SignSessionLost, SignTimedOut, SignUndelivered } from '@/lib/bch-signing'
 import { type CauldronToken, PUSD_TOKEN } from '@/lib/cauldron-tokens'
 import { readableError } from '@/lib/errors'
-import { getTxStatus } from '@/lib/api'
+import { getTxStatus, thorchainBchVaultScripts } from '@/lib/api'
 import {
   bchAsset,
   blockHeight,
@@ -332,7 +332,7 @@ export const syncReverse = async (tx: BridgeTx, update: Update) => {
       }
       const [found, refund, readyAt] = await Promise.all([
         findPayout(op).catch(() => undefined),
-        findThorchainOutbound(deposit.txid, op.binding.lockingBytecode, 'REFUND').catch(() => undefined),
+        thorchainBchVaultScripts().then(vaults => findThorchainOutbound(deposit.txid!, op.binding.lockingBytecode, 'REFUND', vaults)).catch(() => undefined),
         getTxStatus(deposit.txid)
           .then(status => depositReadyAt(status))
           .catch(() => undefined)
