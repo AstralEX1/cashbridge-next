@@ -570,6 +570,39 @@
   .bridge-primary {
     font-size: 16px;
   }
+  /* Phone picker: chains as a grid of logos (the name stays for screen readers), so the tokens show
+     without scrolling, and one scroll for the whole picker instead of a list scrolling inside it. */
+  .bridge-chain-options {
+    gap: 6px;
+  }
+  .bridge-chain-options .bridge-pill {
+    width: 44px;
+    height: 44px;
+    min-height: 0;
+    padding: 0;
+  }
+  .bridge-chain-options .bridge-pill img {
+    width: 24px;
+    height: 24px;
+  }
+  .bridge-chain-name {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+  }
+  .bridge-token-options {
+    max-height: none;
+    overflow: visible;
+  }
+}
+/* iOS zooms the page into any field under 16 px; a touch keyboard also needs the bigger text. */
+@media (pointer: coarse) {
+  .bridge-search input {
+    font-size: 16px;
+  }
 }
 
 .bridge-input-heading {
@@ -1378,7 +1411,8 @@
   max-width: none;
   height: 100%;
   max-height: none;
-  padding: 0;
+  /* Clear of the notch and the home indicator (the page asks for viewport-fit=cover). */
+  padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left);
   overflow-y: auto;
   border: 0;
   border-radius: 0;
@@ -1815,14 +1849,22 @@ button.bridge-flow-primary:disabled {
   .bridge-flow-tokens:not(.is-compact) > .bridge-flow-token strong {
     font-size: 26px;
   }
-  /* Phone width: the icon goes above the amount so three amounts fit side by side. */
-  .bridge-flow-tokens.is-compact .bridge-flow-token > div {
-    flex-direction: column;
-    align-items: flex-start;
-    gap: 6px;
-  }
+  /* Phone width: side by side, three amounts get cut ("0.000546…"), so each token takes a row with its
+     amount in full on the left and ticker and value on the right; the arrows point down. */
   .bridge-flow-tokens.is-compact {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 2px;
+  }
+  .bridge-flow-tokens.is-compact > .bridge-flow-token {
+    flex-direction: row;
     align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+  }
+  .bridge-flow-tokens.is-compact > .bridge-flow-arrow {
+    margin: 0 0 0 1px;
+    transform: rotate(90deg);
   }
   .bridge-flow-token > span {
     padding-left: 0;
@@ -2256,9 +2298,6 @@ button.bridge-flow-primary:disabled {
 }
 .bridge-refresh > :last-child {
   transition: transform 320ms cubic-bezier(0.34, 1.56, 0.64, 1);
-}
-.bridge-refresh:hover > :last-child {
-  transform: rotate(180deg);
 }
 .bridge-refresh[data-busy] > :last-child {
   animation: bridge-refresh-spin 700ms linear infinite;

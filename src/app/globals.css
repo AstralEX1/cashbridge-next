@@ -604,6 +604,8 @@
 
   body {
     @apply bg-background text-foreground;
+    /* viewport-fit=cover lets pages run under the notch and a home-screen app's status bar; keep content clear. */
+    padding: env(safe-area-inset-top) env(safe-area-inset-right) 0 env(safe-area-inset-left);
     /* Off site-wide — Crit is spaced for it. */
     font-kerning: none;
   }

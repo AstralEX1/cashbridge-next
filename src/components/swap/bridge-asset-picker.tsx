@@ -218,7 +218,7 @@ export const BridgeAssetPicker = ({ side, bch, open, onClose }: { side: 'from' |
         />
       </div>
       <p className="bridge-picker-label">{t('chains')}</p>
-      <div className="bridge-options" role="group" aria-label={t('chains')}>
+      <div className={`bridge-options${bch ? '' : ' bridge-chain-options'}`} role="group" aria-label={t('chains')}>
         {(bch ? [Chain.BitcoinCash] : chains).map(item => (
           <HaltedTip key={item} halted={!bch && haltedChains.has(item)}>
             <button
@@ -237,7 +237,7 @@ export const BridgeAssetPicker = ({ side, bch, open, onClose }: { side: 'from' |
               }}
             >
               <img src={`/networks/${item.toLowerCase()}.svg`} width={20} height={20} alt="" />
-              {chainLabel(item)}
+              <span className="bridge-chain-name">{chainLabel(item)}</span>
             </button>
           </HaltedTip>
         ))}
