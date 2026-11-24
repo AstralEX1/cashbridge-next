@@ -3,9 +3,8 @@
 import { ReactNode, useEffect, useMemo, useRef, useState } from 'react'
 import { useTranslations } from 'next-intl'
 import { useQuery } from '@tanstack/react-query'
-import { Chain, EVMChain, EVMChains, getChainConfig } from '@tcswap/core'
+import { Chain } from '@tcswap/core'
 import { explorerTxUrl } from '@/lib/explorer'
-import { getProvider } from '@/lib/evm-rpc'
 import { ArrowRight, Check, ChevronDown, Clock, Coins, ExternalLink, LoaderCircle, ScanSearch, X } from 'lucide-react'
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from '@/components/ui/dialog'
 import { AssetIcon } from '@/components/asset-icon'
@@ -19,22 +18,18 @@ import { GenericButton } from '@/components/generic-button'
 import { BridgeHero } from '@/components/bridge-hero/bridge-hero'
 import { bridgeHeroEligible } from '@/components/bridge-hero/game'
 import { SwapError } from '@/components/swap/swap-error'
-import { BridgeConfig } from '@/config'
 import { useQuote } from '@/hooks/use-quote'
 import { useRates } from '@/hooks/use-rates'
-import { getMidgardActions, getTrack, getTxStatus, thorchainBchVaultScripts } from '@/lib/api'
-import { checkUnspent, findThorchainOutbound, getTransactionState, historyIncludes, verifyPayments, verifyThorchainOutbound } from '@/lib/bch'
-import { getNearStatus, interpretNearStatus, nearExplorerUrl, nudgeNearDeposit } from '@/lib/near-intents'
+import { getTxStatus } from '@/lib/api'
+import { checkUnspent, getTransactionState } from '@/lib/bch'
+import { nearExplorerUrl } from '@/lib/near-intents'
 import { sourceTransactionId } from '@/lib/source-transaction'
-import { getTransferStatus } from '@/lib/transfer-status'
-import { firstLegFromChain, formatStepTime, type SourceReceipt, stepTime } from '@/lib/bridge-tracking'
+import { formatStepTime, stepTime } from '@/lib/bridge-tracking'
 import { bridgeCompletionTransactions } from '@/lib/bridge-completion'
 import { hasSecondAuthorization, OPEN_SECOND_REQUEST_NOTE, recoverSecondSigning, rememberAttempt, sameSecondAttempt, signingDefinitelyStopped, signingRequest } from '@/lib/bridge-signing-recovery'
 import {
   formatBaseUnits,
   inboundMatchesBinding,
-  interpretMidgard,
-  interpretTxStatus,
   minOutputFor,
   secondLegSellAmount,
   toBaseUnits
@@ -55,7 +50,6 @@ import { isDollarStable } from '@/lib/dollar-stable'
 import { useSwapStore } from '@/store/swap-store'
 import {
   type BridgeOperation,
-  type NearLeg,
   type SecondLeg,
   type SwapTransaction,
   transactionStore,
@@ -82,7 +76,8 @@ const REVIEW_TTL_MS = 60_000
 const POLL_MS = 8_000
 
 import { withLock } from '@/lib/bridge-first-leg'
-import { ReverseOperationPanel, SignHint, type SignPhase, syncReverse } from '@/components/swap/reverse-bridge'
+import { ReverseOperationPanel, SignHint, type SignPhase } from '@/components/swap/reverse-bridge'
+import { nearDeposits, syncBridge } from '@/lib/bridge-sync'
 import { SignCancelled, SignDeclined, signInWallet, SignSessionLost, SignTimedOut, SignUndelivered } from '@/lib/bch-signing'
 
 // The persisted operation as every tab sees it right now (another tab may have moved it on).
@@ -163,191 +158,6 @@ export const BchWalletStatus = () => {
 
 export { BridgeBlocked, FirstLegRejected, startBridgeFirstLeg } from '@/lib/bridge-first-leg'
 
-// --- Tracking ----------------------------------------------------------------------------------
-
-// The source transaction's receipt on its own chain. EVM sources report their depth; the others
-// only whether the transaction is in a block and succeeded, from their own nodes (transfer-status.ts).
-const sourceReceipt = async (tx: BridgeTx): Promise<SourceReceipt | undefined> => {
-  if (!tx.hash) return undefined
-  if (!EVMChains.includes(tx.assetFrom.chain as EVMChain)) {
-    const status = await getTransferStatus(tx.assetFrom.chain as Chain, tx.hash)
-    if (status === 'unsupported') return undefined
-    return { confirmations: status === 'pending' ? 0 : 1, failed: status === 'failed' }
-  }
-  const provider = await getProvider(tx.assetFrom.chain as EVMChain)
-  const receipt = await provider.getTransactionReceipt(tx.hash)
-  if (!receipt) return { confirmations: 0, failed: false }
-  const head = await provider.getBlockNumber()
-  return { confirmations: Math.max(1, head - receipt.blockNumber + 1), failed: receipt.status === 0 }
-}
-
-// A NEAR Intents leg: 1Click's status names the BCH payout (there is no memo to find it by), and the chain decides
-// whether that payout reached the bound address with at least the quoted minimum.
-const syncNearFirstLeg = async (tx: BridgeTx, near: NearLeg, update: ReturnType<typeof useUpdateBridge>) => {
-  const op = tx.bridge
-  const [source, status] = await Promise.all([sourceReceipt(tx).catch(() => undefined), getNearStatus(near.depositAddress).catch(() => undefined)])
-  nudgeNearDeposit(status, near.depositAddress, tx.hash)
-  const view = status && interpretNearStatus(status)
-  const outbound = view?.kind === 'paid' ? await verifyPayments(view.txids, op.binding.lockingBytecode, BigInt(near.minAmountOut)).catch(() => undefined) : undefined
-  const fromChain = firstLegFromChain(op, { source, outbound })
-  const nearStatus = status?.status ?? near.status
-  if (fromChain) return update(tx.uid, () => ({ ...fromChain, near: { ...near, status: nearStatus } }))
-  if (!view) return
-  if (outbound?.kind === 'invalid') return update(tx.uid, () => ({ error: outbound.reason, near: { ...near, status: nearStatus } }))
-  if (view.kind === 'refunded')
-    return update(tx.uid, current => ({
-      stage: 'refunded',
-      near: { ...near, status: nearStatus },
-      refunds: [{ asset: tx.assetFrom.identifier, amount: view.amount ?? '0', pending: false }],
-      firstLeg: { ...current.firstLeg, result: 'refunded' }
-    }))
-  const error = view.kind === 'failed' ? view.reason : view.kind === 'pending' ? view.detail : undefined
-  if (nearStatus !== near.status || error !== op.error) update(tx.uid, () => ({ error, near: { ...near, status: nearStatus } }))
-}
-
-// The source transactions NEAR Intents has seen at a leg's deposit address: the deposit address is one-use, so
-// these are this operation's own, and a lost wallet answer recovers from them.
-const nearDeposits = async (near: NearLeg) =>
-  ((await getNearStatus(near.depositAddress)).swapDetails?.originChainTxHashes ?? []).map(t => t.hash).filter(Boolean)
-
-const syncUnknownFirstLeg = async (tx: BridgeTx, near: NearLeg, update: ReturnType<typeof useUpdateBridge>) => {
-  const [hash] = await nearDeposits(near)
-  if (hash) update(tx.uid, () => ({ stage: 'first_leg_pending', hash, error: undefined }))
-}
-
-const syncFirstLeg = async (tx: BridgeTx, update: ReturnType<typeof useUpdateBridge>, setDetails: ReturnType<typeof useSetTransactionDetails>) => {
-  const op = tx.bridge
-  if (!tx.hash) return
-  if (op.near) return syncNearFirstLeg(tx, op.near, update)
-  let timing: Partial<BridgeOperation['firstLeg']> = {}
-
-  // The chains decide: the source receipt on its own chain, and the BCH at the bound address
-  // (THORChain's OUT:<inbound hash> outbound, mempool included). THORChain's status below only
-  // fills gaps (refunds, timing) and never holds a stage back.
-  const [source, outbound] = await Promise.all([
-    sourceReceipt(tx).catch(() => undefined),
-    thorchainBchVaultScripts().then(vaults => findThorchainOutbound(tx.hash!, op.binding.lockingBytecode, 'OUT', vaults)).catch(() => undefined)
-  ])
-  const fromChain = firstLegFromChain(op, { source, outbound })
-  if (fromChain) update(tx.uid, () => fromChain)
-  if (fromChain?.stage) return
-
-  // The aggregator's tracker is the normal progress feed; its answer is shown, never trusted for receipt.
-  getTrack({
-    provider: tx.provider,
-    hash: tx.hash,
-    chainId: getChainConfig(tx.assetFrom.chain).chainId,
-    fromAsset: tx.assetFrom.identifier,
-    fromAddress: tx.addressFrom,
-    fromAmount: tx.amountFrom,
-    toAsset: tx.assetTo.identifier,
-    toAddress: tx.addressTo,
-    toAmount: tx.amountTo
-  })
-    .then(data => setDetails(tx.uid, data))
-    .catch(() => null)
-
-  const view = await getTxStatus(tx.hash)
-    .then(status => {
-      const stages = status.stages
-      // Estimate the remaining outbound queue after swapping, without adding a BCH block wait.
-      const seconds = stages?.swap_finalised?.completed && !stages.swap_status?.pending ? stages.outbound_delay?.remaining_delay_seconds : undefined
-      if (typeof seconds === 'number' && Number.isFinite(seconds) && seconds >= 0) {
-        timing = { readyAt: Date.now() + seconds * 1000, timingUpdatedAt: Date.now() }
-      }
-      return interpretTxStatus(status, op.binding.lockingBytecode)
-    })
-    .catch(async () => interpretMidgard(await getMidgardActions(tx.hash!).catch(() => [])))
-  if (!view) return
-
-  if (view.kind === 'invalid') return update(tx.uid, () => ({ error: view.reason }))
-  if (view.kind === 'refunded')
-    return update(tx.uid, current => ({ stage: 'refunded', refunds: view.refunds, firstLeg: { ...current.firstLeg, ...timing, result: 'refunded' } }))
-  if (view.kind === 'pending')
-    return update(tx.uid, current => ({ refunds: view.refunds, firstLeg: { ...current.firstLeg, ...timing, result: view.result }, error: undefined }))
-
-  const received = []
-  for (const out of view.outbound) {
-    const check = await verifyThorchainOutbound({
-      outTxid: out.txid,
-      inboundHash: tx.hash,
-      lockingBytecode: op.binding.lockingBytecode,
-      expectedSats: BigInt(out.amountSats)
-    })
-    if (check.kind === 'not_found')
-      return update(tx.uid, current => ({ outbound: view.outbound, refunds: view.refunds, firstLeg: { ...current.firstLeg, ...timing, result: view.result } }))
-    if (check.kind === 'invalid') return update(tx.uid, () => ({ outbound: view.outbound, error: check.reason }))
-    received.push(...check.outputs)
-  }
-
-  // Deduplicate by outpoint: the same outbound is never counted twice.
-  const unique = [...new Map(received.map(o => [`${o.txid}:${o.vout}`, o])).values()]
-  const ready = unique.every(o => (op.destinationAsset === 'BCH' || o.unspent) && o.confirmations >= BridgeConfig.minConfirmations)
-  const nativeStage = view.result === 'refund_pending' ? 'first_leg_pending' : 'kept_bch'
-  update(tx.uid, current => ({
-    stage: ready ? (op.destinationAsset === 'BCH' ? nativeStage : 'bch_ready') : 'bch_unconfirmed',
-    outbound: view.outbound,
-    refunds: view.refunds,
-    received: unique,
-    firstLeg: { ...current.firstLeg, ...timing, result: view.result },
-    error: undefined
-  }))
-}
-
-const syncReceived = async (tx: BridgeTx, update: ReturnType<typeof useUpdateBridge>) => {
-  const op = tx.bridge
-  const recovery = await recoverSecondSigning(op)
-  if (recovery) return update(tx.uid, current => sameSecondAttempt(current, op) ? recovery : {})
-  if (!op.received?.length) return
-  const checked = await checkUnspent(op.binding.lockingBytecode, op.received)
-  if (op.destinationAsset === 'BCH') {
-    const ready = checked.every(o => o.confirmations >= BridgeConfig.minConfirmations)
-    const nativeStage = op.firstLeg.result === 'refund_pending' ? 'first_leg_pending' : 'kept_bch'
-    return update(tx.uid, current => sameSecondAttempt(current, op) ? { stage: ready ? nativeStage : 'bch_unconfirmed', received: checked } : {})
-  }
-  const allUnspent = checked.every(o => o.unspent)
-  // Outputs spent by something other than this app's second leg: the user moved their BCH. Before the swap is offered a
-  // missing output may only lag at the server: it counts as spent once it was seen unspent, or its transaction is mined.
-  const gone = checked.find(o => !o.unspent)
-  const spent =
-    !!gone &&
-    (op.stage === 'bch_ready' ||
-      checked.some((o, i) => !o.unspent && op.received![i]?.unspent) ||
-      (await getTransactionState(gone.txid).then(state => state.seen && state.confirmations > 0)))
-  if (spent) {
-    return update(tx.uid, current => sameSecondAttempt(current, op) ? { stage: 'kept_bch', received: checked, error: 'The received BCH was spent from your wallet outside this app' } : {})
-  }
-  const ready = allUnspent && checked.every(o => o.confirmations >= BridgeConfig.minConfirmations)
-  update(tx.uid, current => sameSecondAttempt(current, op) ? { stage: ready ? 'bch_ready' : 'bch_unconfirmed', received: checked } : {})
-}
-
-const syncSecondLeg = async (tx: BridgeTx, update: ReturnType<typeof useUpdateBridge>) => {
-  const op = tx.bridge
-  if (!op.secondLeg?.txid || op.priorSecondLegs?.length) {
-    const recovery = await recoverSecondSigning(op)
-    if (recovery) return update(tx.uid, current => sameSecondAttempt(current, op) ? recovery : {})
-  }
-  const leg = op.secondLeg
-  if (!leg?.txid) return
-  const state = await getTransactionState(leg.txid)
-  // 0-conf: once the network holds the swap (mempool or block) the operation is complete.
-  if (state.seen) {
-    return update(tx.uid, () => ({
-      stage: 'completed',
-      secondLeg: { ...leg, confirmations: state.confirmations, error: undefined }
-    }))
-  }
-  // Not seen by that server, yet the funding is spent: if the address's history holds any swap this
-  // operation signed, that is the spender (a server can lag on the txid), so the swap is done. Only a
-  // genuinely foreign spender means the token swap did not happen.
-  const checked = await checkUnspent(op.binding.lockingBytecode, op.received ?? [])
-  if (checked.some(o => !o.unspent)) {
-    const ours = await historyIncludes(op.binding.lockingBytecode, [leg.txid, ...(op.priorSwapTxids ?? [])])
-    if (ours.length > 0) return update(tx.uid, () => ({ stage: 'completed', secondLeg: { ...leg, txid: ours[0], confirmations: 0, error: undefined } }))
-    update(tx.uid, () => ({ stage: 'failed', error: 'The BCH was spent by a different transaction; the token swap did not happen' }))
-  }
-}
-
 // Mounted once in the layout: follows every unfinished operation (one waiting on the network runs on
 // while another starts) and keeps tabs in step.
 export const BridgeTracker = () => {
@@ -373,27 +183,7 @@ const BridgeSync = ({ tx }: { tx: BridgeTx }) => {
   useQuery({
     queryKey: ['bridge-sync', tx.uid, tx.bridge.stage],
     queryFn: async () => {
-      if (isReverseOperation(tx.bridge)) {
-        await syncReverse(tx, update)
-        return Date.now()
-      }
-      switch (tx.bridge.stage) {
-        case 'first_leg_unknown':
-          if (tx.bridge.near) await syncUnknownFirstLeg(tx, tx.bridge.near, update)
-          break
-        case 'first_leg_pending':
-          await syncFirstLeg(tx, update, setDetails)
-          break
-        case 'bch_unconfirmed':
-        case 'bch_ready':
-          await syncReceived(tx, update)
-          break
-        case 'second_leg_signed':
-        case 'second_leg_unknown':
-        case 'second_leg_pending':
-          await syncSecondLeg(tx, update)
-          break
-      }
+      await syncBridge(tx, update, setDetails)
       return Date.now()
     },
     refetchInterval: POLL_MS,
