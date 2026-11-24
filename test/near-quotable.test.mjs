@@ -28,3 +28,11 @@ test('only a plain no-route answer hides a NEAR token, one direction at a time',
   assert.ok(asked.some(([sell, buy, amount]) => sell === 'ETH.ETH' && buy === 'BCH.BCH' && amount === '0.03125000'), 'probed with $50 of the token')
   assert.deepEqual(await findNearUnquotable(tokens, quote, Date.now() - 1), { forward: [], reverse: [] }, 'past the deadline nothing is hidden')
 })
+
+test('a quotable list that could not be built is not cached', async t => {
+  const { GET } = await import('../src/app/api/near-intents/quotable/route.ts')
+  t.mock.method(globalThis, 'fetch', async () => new Response('down', { status: 503 }))
+  const res = await GET()
+  assert.deepEqual(await res.json(), { forward: [], reverse: [] })
+  assert.equal(res.headers.get('cache-control'), 'no-store')
+})

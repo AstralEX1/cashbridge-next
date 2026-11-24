@@ -24,6 +24,8 @@ export async function GET() {
     last = { at: Date.now(), result }
     result.catch(() => (last = undefined))
   }
-  const result = await last.result.catch(() => ({ forward: [], reverse: [] }))
+  const result = await last.result.catch(() => undefined)
+  // A list that could not be built hides nothing, and is not kept by the CDN.
+  if (!result) return NextResponse.json({ forward: [], reverse: [] }, { headers: { 'Cache-Control': 'no-store' } })
   return NextResponse.json(result, { headers: { 'Cache-Control': 'public, s-maxage=3600, stale-while-revalidate=86400' } })
 }
