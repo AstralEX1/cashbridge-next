@@ -1008,7 +1008,7 @@ const prepareShapeShift = async (sellAsset: string, buyAsset: string, amount: st
     destination_address: destination,
     refund_address: source,
     shapeshift: { quote_id: route.shapeshift.quoteId, swapper: route.shapeshift.swapper },
-    track: 'After sending, call get_bridge_status with shapeshift_quote_id. Optionally report_source_transaction with shapeshift_quote_id and source_tx once the wallet confirms.',
+    track: 'After sending, call get_bridge_status with shapeshift_quote_id. No report_source_transaction is needed.',
     safety: SAFETY
   }
 }
@@ -1271,19 +1271,14 @@ const reportSourceTransaction = async (args: Args, context: ToolContext) => {
       ...(!reported && { note: 'NEAR Intents did not take the notice; the swap still starts once the deposit confirms. Poll get_bridge_status.' })
     }
   }
-  if (shapeId) {
-    if (!context.allowWrite()) throw new ToolError('Too many updates from this client; wait a few minutes')
-    const status = await getShapeShiftStatus(shapeId).catch(() => undefined)
-    if (!status) throw new ToolError('ShapeShift did not answer for this quote id; try again shortly')
+  // Still accepted so agents that send it keep working; ShapeShift takes no such notice.
+  if (shapeId)
     return {
       shapeshift_quote_id: shapeId,
       source_tx: raw,
-      status: status.status,
-      ...interpretShapeShiftStatus(status),
-      reported: true,
-      note: 'ShapeShift tracks externally paid quotes by quote id; keep polling get_bridge_status with shapeshift_quote_id.'
+      reported: false,
+      note: 'ShapeShift follows the transfer by its quote id and needs no report; poll get_bridge_status with shapeshift_quote_id.'
     }
-  }
   if (args.order_id === undefined && args.order_token === undefined)
     throw new ToolError('Give order_id + order_token, near_deposit_address, or shapeshift_quote_id with source_tx')
   const { id, capability } = orderCredentials(args)
@@ -1362,7 +1357,7 @@ export const TOOLS: Tool[] = [
     name: 'report_source_transaction',
     title: 'Report the source transaction',
     description:
-      'Tells the Cashbridge Router (order_id and order_token), NEAR Intents (near_deposit_address) or ShapeShift (shapeshift_quote_id) which transaction paid the deposit, so it is matched sooner.',
+      'Tells the Cashbridge Router (order_id and order_token) or NEAR Intents (near_deposit_address) which transaction paid the deposit, so it is matched sooner. ShapeShift (shapeshift_quote_id) follows its quote id and needs no report.',
     inputSchema: {
       type: 'object',
       properties: {
