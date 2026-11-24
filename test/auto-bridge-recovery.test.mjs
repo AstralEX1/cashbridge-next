@@ -153,6 +153,21 @@ test('restoring a stale database cannot allocate another address or sign, even w
   } finally { rmSync(directory, { recursive: true, force: true }) }
 })
 
+test('unpaid orders do not use up the Router\'s capacity, while one with a source payment does', () => {
+  // The limit holds two orders' worth; the open one from setup is unpaid.
+  const env = setup()
+  try {
+    const more = () => env.store.create(randomUUID(), randomBytes(32).toString('hex'), intent, '200', 200)
+    more()
+    const paid = more()
+    env.store.update(paid.id, paid.version, { sourceHash: solana })
+    more()
+    const second = more()
+    env.store.update(second.id, second.version, { sourceHash: 'AB'.repeat(32) })
+    assert.throws(more, error => error.status === 503)
+  } finally { env.store.close() }
+})
+
 test('closed admission preserves existing idempotent creates, status and source hints', async () => {
   const env = setup()
   const service = { store: env.store, quote: async () => ({ output: 1000n }), admit: () => false }

@@ -232,6 +232,9 @@ export class OrderStore {
         active.length >= this.limits.maxOpenOrders ||
         active.reduce((sum, order) => {
           const actual = coinsHeld(order).reduce((total, coin) => total + BigInt(coin.value), 0n)
+          // An order nobody has paid holds nothing, so a burst of unpaid ones cannot close admission; each swap checks the
+          // real exposure again (saveAttempt) and sends any excess back as BCH.
+          if (actual === 0n && !order.sourceHash && !order.inboundHash) return sum
           return sum + (actual > BigInt(order.expectedBchSats) ? actual : BigInt(order.expectedBchSats))
         }, 0n) +
           BigInt(intent.expectedBchSats) >
