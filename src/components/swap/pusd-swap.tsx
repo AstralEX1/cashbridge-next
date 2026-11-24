@@ -1188,8 +1188,9 @@ const ReadyStage = ({ tx, bchUsd, common }: { tx: BridgeTx; bchUsd?: number; com
   const leg = useSecondLeg(tx)
   const token = leg.token
   const { reconnectStalled } = useBchWallet()
-  // Shown from the live trade at once; the reviewed build (exact figures) replaces it when ready.
-  const live = useTokenQuoteFor(leg.reviewed ? undefined : formatBch(leg.total), token)
+  // Shown from the live trade at once; the reviewed build's exact figures replace its amounts when ready, while the
+  // live trade keeps the price impact and fees it carries (same query as the panel's, so no extra request).
+  const live = useTokenQuoteFor(formatBch(leg.total), token)
   const figures = leg.reviewed
     ? live.quote && {
         ...live.quote,
