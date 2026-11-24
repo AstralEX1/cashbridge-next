@@ -73,10 +73,12 @@ test('reverse bridge destination picks still update the stored non-BCH asset', (
   const handler = source.match(/const pickAsset = \(asset: Asset\) => \{\s+([\s\S]*?)\s+onClose\(\)/)?.[1]
   assert.ok(handler)
   let changed
-  const choose = new Function('openNetworks', 'side', 'asset', 'setAssetTo', 'setAssetFrom', handler)
-  choose(false, 'to', { identifier: 'ETH.ETH' }, () => { changed = 'to' }, () => { changed = 'from' })
+  let local = 'kept'
+  const choose = new Function('openNetworks', 'side', 'asset', 'setAssetTo', 'setAssetFrom', 'localSide', 'setLocalTo', handler)
+  choose(false, 'to', { identifier: 'ETH.ETH' }, () => { changed = 'to' }, () => { changed = 'from' }, true, token => { local = token })
   assert.equal(changed, 'from')
-  choose(true, 'to', { identifier: 'ETH.ETH' }, () => { changed = 'to' }, () => { changed = 'from' })
+  assert.equal(local, undefined, 'an asset on another chain ends a swap on Bitcoin Cash')
+  choose(true, 'to', { identifier: 'ETH.ETH' }, () => { changed = 'to' }, () => { changed = 'from' }, false, () => assert.fail('no swap on Bitcoin Cash here'))
   assert.equal(changed, 'to')
 })
 

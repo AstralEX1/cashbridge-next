@@ -279,3 +279,32 @@
     animation: none;
   }
 }
+.scanner-tools--facets {
+  margin-top: 12px;
+}
+.scanner-facets button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  font-variant-numeric: tabular-nums;
+}
+.scanner-facets button:disabled {
+  opacity: 0.4;
+}
+@media (max-width: 760px) {
+  /* Direction and status share one row on a phone. */
+  .scanner-tools--facets {
+    flex-wrap: nowrap;
+  }
+  .scanner-tools--facets .scanner-facets {
+    flex: 2 1 0;
+  }
+  .scanner-tools--facets .scanner-facets + .scanner-facets {
+    flex-grow: 4;
+  }
+  .scanner-facets button {
+    min-width: 0;
+    padding: 0 6px;
+  }
+}

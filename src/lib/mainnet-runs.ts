@@ -1,7 +1,7 @@
 // Real transfers through this site, each checked on public explorers. The docs page /docs/mainnet and the
 // scanner both list them.
 
-const bch = (id: string) => `https://blockchair.com/bitcoin-cash/transaction/${id}`
+const bch = (id: string) => `https://explorer.selene.cash/tx/${id}`
 const bsc = (hash: string) => `https://bscscan.com/tx/${hash}`
 const avax = (hash: string) => `https://snowscan.xyz/tx/${hash}`
 const base = (hash: string) => `https://basescan.org/tx/${hash}`

@@ -1,8 +1,10 @@
-import { getExplorerTxUrl, type Chain } from '@tcswap/core'
+import type { Chain } from '@tcswap/core'
+import { explorerTxUrl } from '@/lib/explorer'
 import { getChainConfig } from '@tcswap/helpers'
 import type { FeedOrder, OrderState } from '@/lib/auto-bridge-contract'
 import { formatBaseUnits } from '@/lib/bridge'
 import { FEATURED_TOKENS } from '@/lib/cauldron-tokens'
+import { isDollarStable } from '@/lib/dollar-stable'
 import type { Run } from '@/lib/mainnet-runs'
 import { isEvmChain } from '@/lib/payout-chains'
 import { nearExplorerUrl } from '@/lib/near-intents'
@@ -35,6 +37,19 @@ export interface ScanRow {
   to: ScanSide
   status: ScanStatus
   legs: ScanLeg[]
+}
+
+// Into Bitcoin Cash or out of it; a swap between two other chains (one this browser made) is neither.
+export type ScanDirection = 'in' | 'out'
+export const directionOf = ({ from, to }: Pick<ScanRow, 'from' | 'to'>): ScanDirection | undefined =>
+  to.chain === 'BCH' && from.chain !== 'BCH' ? 'in' : from.chain === 'BCH' && to.chain !== 'BCH' ? 'out' : undefined
+
+// What a transfer moved in US dollars: a dollar-stable side at face value, else its BCH side at `bchUsd`.
+export const rowUsd = ({ from, to }: Pick<ScanRow, 'from' | 'to'>, bchUsd?: number) => {
+  const value = (side: ScanSide, price: number) => (side.amount && Number(side.amount) > 0 ? Number(side.amount) * price : undefined)
+  const stable = [from, to].find(side => isDollarStable(side.ticker))
+  const bch = [from, to].find(side => side.chain === 'BCH' && side.ticker === 'BCH')
+  return (stable && value(stable, 1)) ?? (bch && bchUsd ? value(bch, bchUsd) : undefined)
 }
 
 // Chains with a logo in public/networks (test/network-icons.test.mjs keeps this in step with the folder).
@@ -85,7 +100,7 @@ const mark = (ticker: string, chain: string, icon?: string): Pick<ScanSide, 'ico
 const EXPLORERS: [RegExp, string][] = [
   [/thorchain\.net|runescan/, 'thor'],
   [/near-intents/, 'near'],
-  [/bitcoin-cash|bch\.|cashscript|salemkode/, 'bch'],
+  [/bitcoin-cash|bch\.|cashscript|salemkode|explorer\.selene/, 'bch'],
   [/bscscan/, 'bsc'],
   [/snowscan|snowtrace|avascan/, 'avax'],
   [/basescan/, 'base'],
@@ -147,9 +162,9 @@ export const sideOf = (ticker: string, chain: string, amount?: string, icon?: st
 }
 
 export const thorchainTxUrl = (hash: string) => `https://thorchain.net/tx/${hash.replace(/^0x/i, '').toLowerCase()}`
-export const bchTxUrl = (txid: string) => getExplorerTxUrl({ chain: 'BCH' as Chain, txHash: txid })
+export const bchTxUrl = (txid: string) => explorerTxUrl({ chain: 'BCH' as Chain, txHash: txid })
 export const sourceTxUrl = (chain: string, hash: string) =>
-  getExplorerTxUrl({ chain: chain as Chain, txHash: isEvmChain(chain) && /^[0-9a-f]{64}$/i.test(hash) ? `0x${hash}` : hash }) || thorchainTxUrl(hash)
+  explorerTxUrl({ chain: chain as Chain, txHash: isEvmChain(chain) && /^[0-9a-f]{64}$/i.test(hash) ? `0x${hash}` : hash }) || thorchainTxUrl(hash)
 
 const STATUS: Partial<Record<OrderState, ScanStatus>> = {
   completed: 'completed',

@@ -81,6 +81,11 @@ export default function Page() {
         </li>
       </ul>
 
+      <h2 id="on-bitcoin-cash">Swap on Bitcoin Cash alone</h2>
+      <p>
+        To trade BCH for PUSD, MUSD or another Cauldron token, or a token back to BCH, open the bottom picker and choose <strong>Bitcoin Cash</strong>. The heading changes to <strong>Swap on Bitcoin Cash</strong>. It is one Cauldron transaction from your BCH wallet, signed once, with no bridge and no Cashbridge Router. The pools trade at the price the transaction was built with or not at all, and the BCH explorer link appears as soon as it is sent.
+      </p>
+
       <h2 id="stops">If a step stops</h2>
       <ul>
         <li>

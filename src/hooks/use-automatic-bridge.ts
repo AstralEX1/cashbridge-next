@@ -16,11 +16,13 @@ export const useAutomaticBridge = () => {
   const reverse = useSwapStore(state => state.reverse)
   const token = useSwapStore(state => state.bchToken)
   const openNetworks = useSwapStore(state => state.openNetworks)
+  // A swap that stays on Bitcoin Cash is one wallet signature with no bridge: nothing for the Router.
+  const onBch = useSwapStore(state => state.reverse && state.localTo !== undefined)
   const mode = automaticPreference(state => state.mode)
   const address = automaticPreference(state => state.recipient)
   const wallet = useBchWallet()
   const hydrated = useAutomaticHydrated()
-  const eligible = !openNetworks && automaticEligible(reverse, token?.category, BridgeConfig.routerSales)
+  const eligible = !openNetworks && !onBch && automaticEligible(reverse, token?.category, BridgeConfig.routerSales)
   const plainBch = !openNetworks && !reverse && token === null
   const routerAvailable = eligible || plainBch
   const automatic = hydrated && eligible && mode === 'automatic'

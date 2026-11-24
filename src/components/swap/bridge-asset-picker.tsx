@@ -105,6 +105,10 @@ export const BridgeAssetPicker = ({ side, bch, open, onClose }: { side: 'from' |
   const selected = openNetworks && side === 'to' ? assetTo : assetFrom
   const bchToken = useSwapStore(state => state.bchToken)
   const setBchToken = useSwapStore(state => state.setBchToken)
+  // Back from BCH the other side also offers Bitcoin Cash itself: a swap on Cauldron that never leaves it.
+  const localSide = !bch && side === 'to' && reverse && !openNetworks
+  const localTo = useSwapStore(state => state.localTo)
+  const setLocalTo = useSwapStore(state => state.setLocalTo)
   const { assets: modeAssets, isLoading } = useModeAssets()
   const { mimir, mayaMimir } = useMimir()
   const [chain, setChain] = useState<Chain | undefined>(selected?.chain)
@@ -122,7 +126,9 @@ export const BridgeAssetPicker = ({ side, bch, open, onClose }: { side: 'from' |
     return modeAssets.filter(reverse ? isReverseTargetAsset : isBridgeSellAsset)
   }, [modeAssets, openNetworks, other?.identifier, reverse])
   const chains = useMemo(() => [...new Set(assets.map(a => a.chain))].sort((a, b) => chainLabel(a).localeCompare(chainLabel(b))), [assets])
-  const activeChain = bch ? Chain.BitcoinCash : (chain && chains.includes(chain) ? chain : selected && chains.includes(selected.chain) ? selected.chain : chains[0])
+  const pickerChains = bch ? [Chain.BitcoinCash] : localSide ? [Chain.BitcoinCash, ...chains] : chains
+  const activeChain = bch || (localSide && chain === Chain.BitcoinCash) ? Chain.BitcoinCash : (chain && chains.includes(chain) ? chain : selected && chains.includes(selected.chain) ? selected.chain : chains[0])
+  const bchList = bch || (localSide && activeChain === Chain.BitcoinCash)
   const haltedChains = useMemo(
     () => new Set(chains.filter(item => assets.filter(a => a.chain === item).every(a => isAssetHalted(openNetworks ? { ...a, providers: [ProviderName.THORCHAIN] } : a, mimir, mayaMimir)))),
     [chains, assets, mimir, mayaMimir, openNetworks]
@@ -137,12 +143,12 @@ export const BridgeAssetPicker = ({ side, bch, open, onClose }: { side: 'from' |
     return haystack.some(value => value?.toLowerCase().includes(query))
   })
 
-  const listed = useQuery({ queryKey: ['cauldron-tokens'], queryFn: fetchCauldronTokens, enabled: bch && open, staleTime: 5 * 60_000, retry: 1 })
+  const listed = useQuery({ queryKey: ['cauldron-tokens'], queryFn: fetchCauldronTokens, enabled: bchList && open, staleTime: 5 * 60_000, retry: 1 })
   const deferredQuery = useDeferredValue(query)
   const searched = useQuery({
     queryKey: ['cauldron-token-search', deferredQuery],
     queryFn: () => searchCauldronTokens(deferredQuery),
-    enabled: bch && open && deferredQuery.length >= 2,
+    enabled: bchList && open && deferredQuery.length >= 2,
     staleTime: 60_000,
     retry: false
   })
@@ -152,15 +158,18 @@ export const BridgeAssetPicker = ({ side, bch, open, onClose }: { side: 'from' |
     // A category id pasted whole finds its token; otherwise ticker and name are matched.
     return unique.filter(token => !query || token.category === query || [token.ticker, token.name].some(value => value?.toLowerCase().includes(query)))
   }, [listed.data, searched.data, query])
-  const showBch = !query || 'bch bitcoin cash'.includes(query)
+  // A swap on Bitcoin Cash trades BCH against one token, so the side it sells is not offered again.
+  const showBch = (!query || 'bch bitcoin cash'.includes(query)) && !(localSide && bchToken === null)
+  const tokenOptions = localSide && bchToken !== null ? [] : bchOptions
 
   useEffect(() => {
     if (!open) return
-    setChain(selected?.chain)
+    setChain(localSide && localTo !== undefined ? Chain.BitcoinCash : selected?.chain)
     setSearch('')
     setOpened(n => n + 1)
     // On touch screens the keyboard would cover the list the picker was opened for; typing starts with a tap.
     if (matchMedia('(hover: hover)').matches) searchInput.current?.focus()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, selected?.chain])
 
   // A tapped chain glides the picker itself (never the page) down to that chain's tokens, after they render,
@@ -174,15 +183,18 @@ export const BridgeAssetPicker = ({ side, bch, open, onClose }: { side: 'from' |
   }, [chainTap])
 
   const pickBch = (token: CauldronToken | null) => {
-    setBchToken(token)
+    if (localSide) setLocalTo(token)
+    else setBchToken(token)
     onClose()
   }
+  const pickedBch = localSide ? localTo : bchToken
 
   const assetHalted = (asset: Asset) => isAssetHalted(openNetworks ? { ...asset, providers: [ProviderName.THORCHAIN] } : asset, mimir, mayaMimir)
 
   const pickAsset = (asset: Asset) => {
     if (openNetworks && side === 'to') setAssetTo(asset)
     else setAssetFrom(asset)
+    if (localSide) setLocalTo(undefined)
     onClose()
   }
 
@@ -219,7 +231,7 @@ export const BridgeAssetPicker = ({ side, bch, open, onClose }: { side: 'from' |
       </div>
       <p className="bridge-picker-label">{t('chains')}</p>
       <div className={`bridge-options${bch ? '' : ' bridge-chain-options'}`} role="group" aria-label={t('chains')}>
-        {(bch ? [Chain.BitcoinCash] : chains).map(item => (
+        {pickerChains.map(item => (
           <HaltedTip key={item} halted={!bch && haltedChains.has(item)}>
             <button
               type="button"
@@ -260,21 +272,21 @@ export const BridgeAssetPicker = ({ side, bch, open, onClose }: { side: 'from' |
         {t('tokens')}
       </p>
       <div key={`${activeChain}-${opened}`} className="bridge-options bridge-token-options" role="group" aria-label={t('tokens')}>
-        {bch ? (
+        {bchList ? (
           <>
             {showBch && (
-              <button type="button" className="bridge-pill" style={rowIn(0)} aria-pressed={bchToken === null} onClick={() => pickBch(null)}>
+              <button type="button" className="bridge-pill" style={rowIn(0)} aria-pressed={pickedBch === null} onClick={() => pickBch(null)}>
                 <img src="/networks/bch.svg" width={20} height={20} alt="" />
                 BCH
               </button>
             )}
-            {bchOptions.map((token, i) => (
+            {tokenOptions.map((token, i) => (
               <button
                 type="button"
                 key={token.category}
                 className="bridge-pill"
                 style={rowIn(i + 1)}
-                aria-pressed={sameToken(bchToken, token)}
+                aria-pressed={sameToken(pickedBch, token)}
                 title={`${token.name ?? token.ticker} · ${token.category}`}
                 onClick={() => pickBch(token)}
               >
@@ -308,19 +320,19 @@ export const BridgeAssetPicker = ({ side, bch, open, onClose }: { side: 'from' |
           })
         )}
       </div>
-      {!bch && tokens.length === 0 && (
+      {!bchList && tokens.length === 0 && (
         <p className="bridge-picker-empty" role="status">
           <ThorchainMark size={18} />
           <NearMark size={18} />
           <span>{t(isLoading ? 'loading' : !modeAssets ? 'assetsUnavailable' : 'empty')}</span>
         </p>
       )}
-      {bch && (listed.isLoading || searched.isFetching) && (
+      {bchList && (listed.isLoading || searched.isFetching) && (
         <p className="bridge-muted text-sm" role="status">
           {t('loading')}
         </p>
       )}
-      {bch && listed.isError && (
+      {bchList && listed.isError && (
         <p className="bridge-picker-empty" role="status">
           <img src="/networks/bch.svg" width={18} height={18} alt="" className="bridge-mark" />
           <span>{t('tokensUnavailable')}</span>

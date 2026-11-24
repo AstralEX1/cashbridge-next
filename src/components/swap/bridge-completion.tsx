@@ -2,7 +2,7 @@
 
 import type { ReactNode } from 'react'
 import { useQuery } from '@tanstack/react-query'
-import { getExplorerTxUrl } from '@tcswap/core'
+import { explorerTxUrl } from '@/lib/explorer'
 import { Check, ExternalLink, X } from 'lucide-react'
 import { useTranslations } from 'next-intl'
 import { chainLabel } from '@/components/connect-wallet/config'
@@ -73,7 +73,7 @@ export const BridgeCompletion = ({ received, transactions, liquidityCategory, on
               <ol>
                 {transactions.map(tx => (
                   <li key={tx.key}>
-                    <a href={getExplorerTxUrl({ chain: tx.chain, txHash: tx.hash })} target="_blank" rel="noopener noreferrer" title={tx.hash}>
+                    <a href={explorerTxUrl({ chain: tx.chain, txHash: tx.hash })} target="_blank" rel="noopener noreferrer" title={tx.hash}>
                       <span className="bridge-complete-check"><Check size={16} strokeWidth={2.5} aria-hidden="true" /></span>
                       <span className="bridge-complete-step">{t(tx.kind, { chain: chainLabel(tx.chain) })}</span>
                       <ExternalLink size={18} aria-hidden="true" />

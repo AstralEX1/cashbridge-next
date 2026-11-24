@@ -3,7 +3,8 @@
 import { ReactNode, useEffect, useMemo, useRef, useState } from 'react'
 import { useTranslations } from 'next-intl'
 import { useQuery } from '@tanstack/react-query'
-import { Chain, EVMChain, EVMChains, getChainConfig, getExplorerTxUrl } from '@tcswap/core'
+import { Chain, EVMChain, EVMChains, getChainConfig } from '@tcswap/core'
+import { explorerTxUrl } from '@/lib/explorer'
 import { getProvider } from '@/lib/evm-rpc'
 import { ArrowRight, Check, ChevronDown, Clock, Coins, ExternalLink, LoaderCircle, ScanSearch, X } from 'lucide-react'
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from '@/components/ui/dialog'
@@ -508,7 +509,7 @@ export const TxLink = ({ href, className, label, title, children }: { href?: str
 // Where a step's transaction is shown: a THORChain swap (inbound hash) on THORChain's explorer, which
 // follows it through to the payout; anything else on its own chain's explorer.
 export const thorchainTxUrl = (hash: string) => `https://thorchain.net/tx/${encodeURIComponent(sourceTransactionId(hash) ?? hash.trim())}`
-export const chainTxUrl = (chain: Chain, hash: string) => getExplorerTxUrl({ chain, txHash: hash })
+export const chainTxUrl = (chain: Chain, hash: string) => explorerTxUrl({ chain, txHash: hash })
 
 const FlowAmount = ({ token }: { token: FlowToken }) => (
   <div className="bridge-flow-token">

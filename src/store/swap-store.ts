@@ -2,7 +2,7 @@ import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
 import { Asset } from '@/components/swap/asset'
 import { BridgeConfig } from '@/config'
-import { type CauldronToken, isCauldronToken, PUSD_TOKEN } from '@/lib/cauldron-tokens'
+import { type CauldronToken, isCauldronToken, PUSD_TOKEN, sameToken } from '@/lib/cauldron-tokens'
 import { isPayoutChain } from '@/lib/payout-chains'
 import { automaticPreference } from '@/store/auto-bridge-store'
 
@@ -25,6 +25,9 @@ export const isReverseTargetAsset = (asset?: Asset) => isBridgeSellAsset(asset) 
 // Which bridge carries the first leg: the better quote ('auto'), or the one the user picked.
 export type RouteChoice = 'auto' | 'thorchain' | 'near' | 'shapeshift'
 
+// The same Bitcoin Cash asset: native BCH (null) or one Cauldron token.
+const sameBchAsset = (a: CauldronToken | null, b: CauldronToken | null) => (a === null ? b === null : sameToken(a, b))
+
 interface SwapState {
   routeChoice: RouteChoice
   setRouteChoice: (choice: RouteChoice) => void
@@ -34,6 +37,10 @@ interface SwapState {
   // The BCH side of the bridge: native BCH (null) or a Cauldron token, bought or sold through Cauldron.
   bchToken: CauldronToken | null
   setBchToken: (token: CauldronToken | null) => void
+  // Back from BCH, a Bitcoin Cash asset picked on the other side: the swap never leaves Bitcoin Cash, one Cauldron trade
+  // from `bchToken` into this (native BCH when null). Undefined: the other chain's `assetFrom` is paid out.
+  localTo?: CauldronToken | null
+  setLocalTo: (token?: CauldronToken | null) => void
   // false: other chain -> THORChain -> BCH (-> token). true: (token ->) BCH -> THORChain -> EVM chain.
   // `assetFrom` is the other chain's asset in both directions; `amountFrom` is always what is sent.
   // Ignored while openNetworks is on (the pair itself is the direction).
@@ -68,7 +75,7 @@ export const useSwapStore = create<SwapState>()(
         if (openNetworks) {
           // Free pairs use Manual execution; the Router only settles the BCH / CashToken path.
           automaticPreference.getState().setMode('manual')
-          set({ openNetworks: true, reverse: false, bchToken: null, amountFrom: '' })
+          set({ openNetworks: true, reverse: false, bchToken: null, localTo: undefined, amountFrom: '' })
           return
         }
         const { assetFrom, assetTo } = get()
@@ -76,6 +83,7 @@ export const useSwapStore = create<SwapState>()(
           openNetworks: false,
           reverse: false,
           bchToken: PUSD_TOKEN,
+          localTo: undefined,
           assetFrom: isBridgeSellAsset(assetFrom) ? assetFrom : undefined,
           assetTo: isBridgeBuyAsset(assetTo) ? assetTo : undefined,
           amountFrom: ''
@@ -83,10 +91,22 @@ export const useSwapStore = create<SwapState>()(
       },
       bchToken: PUSD_TOKEN,
       setBchToken: token => {
-        if (token === null || isCauldronToken(token)) set({ bchToken: token })
+        if (token !== null && !isCauldronToken(token)) return
+        const { bchToken, localTo } = get()
+        if (localTo === undefined) return set({ bchToken: token })
+        // Picking what the swap buys as what it sells turns the pair around; a token for a token buys BCH instead.
+        if (sameBchAsset(token, localTo)) return set({ bchToken: token, localTo: bchToken })
+        set({ bchToken: token, ...(token !== null && localTo !== null && { localTo: null }) })
+      },
+      localTo: undefined,
+      setLocalTo: token => {
+        if (token === undefined) return set({ localTo: undefined })
+        if (token !== null && !isCauldronToken(token)) return
+        // One Cauldron trade: BCH on exactly one side.
+        if ((token === null) !== (get().bchToken === null)) set({ localTo: token })
       },
       reverse: false,
-      setReverse: reverse => set({ reverse, amountFrom: '' }),
+      setReverse: reverse => set({ reverse, localTo: undefined, amountFrom: '' }),
       slippage: INITIAL_SLIPPAGE,
       customInterval: INITIAL_CUSTOM_INTERVAL,
       customQuantity: INITIAL_CUSTOM_QUANTITY,
@@ -128,7 +148,9 @@ export const useSwapStore = create<SwapState>()(
         set(state =>
           state.openNetworks
             ? { assetFrom: state.assetTo, assetTo: state.assetFrom, amountFrom: '' }
-            : { reverse: !state.reverse, amountFrom: '' }
+            : state.reverse && state.localTo !== undefined
+              ? { bchToken: state.localTo, localTo: state.bchToken, amountFrom: '' }
+              : { reverse: !state.reverse, amountFrom: '' }
         ),
 
       setHasHydrated: (state: boolean) => set({ hasHydrated: state })

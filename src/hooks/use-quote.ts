@@ -69,6 +69,8 @@ export const useQuote = (): UseQuote => {
   const reverse = useSwapStore(state => state.reverse)
   const openNetworks = useSwapStore(state => state.openNetworks)
   const bchToken = useSwapStore(state => state.bchToken)
+  // A swap that stays on Bitcoin Cash is priced on Cauldron alone (useBchSwap).
+  const onBch = useSwapStore(state => state.reverse && state.localTo !== undefined)
   const sale = useTokenSale(!openNetworks && reverse ? bchToken : null, valueFrom.toSignificant())
   const sellAsset = openNetworks ? assetFrom?.identifier : reverse ? BridgeConfig.buyAsset : assetFrom?.identifier
   // Bridge forward settles native BCH (CashToken afterwards on Cauldron). Open networks quotes the selected
@@ -213,7 +215,7 @@ export const useQuote = (): UseQuote => {
       const sample = previous?.thorchain ?? previous?.near ?? previous?.shapeshift
       return sample && isQuoteFor(sample, sellAsset, buyAsset) && isHoudiniProvider(sample.providers[0]) === isPrivateSwap ? previous : undefined
     },
-    enabled: !!(sellAmount && sellAsset && buyAsset && (reverse || pairMatchesMode)),
+    enabled: !!(sellAmount && sellAsset && buyAsset && (reverse || pairMatchesMode)) && !(onBch && !openNetworks),
     // A THORChain timeout is transient: asked again a few seconds later, quietly.
     retry: (count, error) => error instanceof QuoteTimeoutError && count < 2,
     retryDelay: 3_000,
