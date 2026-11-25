@@ -1,7 +1,7 @@
 'use client'
 
 import { useQuery } from '@tanstack/react-query'
-import { ArrowLeftRight, ArrowUpRight, CircleCheck, CircleDollarSign, LifeBuoy, LoaderCircle, LogIn, LogOut, Search, SearchX, TriangleAlert, Undo2, Wallet, X, Zap } from 'lucide-react'
+import { ArrowLeftRight, ArrowUpRight, CircleDollarSign, LifeBuoy, LoaderCircle, Search, SearchX, SlidersHorizontal, Wallet, X, Zap } from 'lucide-react'
 import Link from 'next/link'
 import { useEffect, useMemo, useState, useSyncExternalStore } from 'react'
 import { NumberTicker } from '@/components/landing/number-ticker'
@@ -19,43 +19,39 @@ import { useWalletScan } from './use-wallet-scan'
 
 const noSubscribe = () => () => {}
 
-type Filter = 'all' | 'router' | 'manual'
-const FILTERS: [Filter, string, React.ReactNode][] = [
-  ['all', 'All transfers', 'All'],
-  ['router', 'Cashbridge Router', <Zap key="router" size={16} aria-hidden />],
-  ['manual', 'Manual', <Wallet key="manual" size={16} aria-hidden />]
+type Mode = 'router' | 'manual'
+const MODES: [Mode, string][] = [
+  ['router', 'Cashbridge Router'],
+  ['manual', 'Manual']
 ]
-const DIRECTIONS: [ScanDirection, string, React.ReactNode][] = [
-  ['in', 'Into Bitcoin Cash', <LogIn key="in" size={16} aria-hidden />],
-  ['out', 'Out of Bitcoin Cash', <LogOut key="out" size={16} aria-hidden />]
+const DIRECTIONS: [ScanDirection, string][] = [
+  ['in', 'Into Bitcoin Cash'],
+  ['out', 'Out of Bitcoin Cash']
 ]
-const STATUSES: [ScanStatus, React.ReactNode][] = [
-  ['completed', <CircleCheck key="completed" size={16} aria-hidden />],
-  ['pending', <LoaderCircle key="pending" size={16} aria-hidden />],
-  ['refunded', <Undo2 key="refunded" size={16} aria-hidden />],
-  ['review', <TriangleAlert key="review" size={16} aria-hidden />]
-]
+const STATUSES = (['completed', 'pending', 'refunded', 'review'] as const).map((status): [ScanStatus, string] => [status, statusLabel(status)])
 
-// Pills that each narrow the list to rows matching them, with how many rows each would show; pressing the active pill
-// shows all again.
-function Facets<T extends string>({ label, value, options, count, onChange }: {
+// One row of the filter panel: "All" and each option, with how many transfers it would leave.
+function Choices<T extends string>({ label, value, options, count, onChange }: {
   label: string
   value?: T
-  options: [T, string, React.ReactNode][]
-  count: (option: T) => number
+  options: [T, string][]
+  count: (option?: T) => number
   onChange: (next?: T) => void
 }) {
   return (
-    <div className="scanner-filters scanner-facets" role="group" aria-label={label}>
-      {options.map(([option, name, icon]) => {
-        const n = count(option)
-        return (
-          <button key={option} type="button" aria-pressed={value === option} aria-label={`${name}: ${n}`} title={name} disabled={!n && value !== option} onClick={() => onChange(value === option ? undefined : option)}>
-            {icon}
-            <span>{n}</span>
-          </button>
-        )
-      })}
+    <div className="scanner-choice" role="group" aria-label={label}>
+      <span>{label}</span>
+      <div>
+        {([[undefined, 'All'], ...options] as [T | undefined, string][]).map(([option, name]) => {
+          const n = count(option)
+          return (
+            <button key={option ?? 'all'} type="button" aria-pressed={value === option} disabled={!n && value !== option} onClick={() => onChange(option)}>
+              {name}
+              <span>{n}</span>
+            </button>
+          )
+        })}
+      </div>
     </div>
   )
 }
@@ -75,7 +71,8 @@ const ChainMark = ({ chain, size }: { chain: string; size: number }) => {
 export function ScannerView() {
   const { rows, now, live } = useScanFeed()
   const [query, setQuery] = useState('')
-  const [filter, setFilter] = useState<Filter>('all')
+  const [filtersOpen, setFiltersOpen] = useState(false)
+  const [mode, setMode] = useState<Mode>()
   const [direction, setDirection] = useState<ScanDirection>()
   const [status, setStatus] = useState<ScanStatus>()
   // THORChain's own price of BCH, for transfers with no dollar-stable side.
@@ -114,10 +111,13 @@ export function ScannerView() {
   const walletRows = useWalletScan(address, rows)
   const searching = !!address
   const base = searching ? (walletRows ?? []) : rows
-  const matched = base.filter(row => (filter === 'all' || row.router === (filter === 'router')) && (searching || matchesQuery(row, query)))
-  const inDirection = (row: ScanRow) => !direction || directionOf(row) === direction
-  const inStatus = (row: ScanRow) => !status || row.status === status
-  const shown = matched.filter(row => inDirection(row) && inStatus(row))
+  const matched = searching ? base : base.filter(row => matchesQuery(row, query))
+  const modeIs = (m?: Mode) => (row: ScanRow) => !m || row.router === (m === 'router')
+  const directionIs = (d?: ScanDirection) => (row: ScanRow) => !d || directionOf(row) === d
+  const statusIs = (st?: ScanStatus) => (row: ScanRow) => !st || row.status === st
+  const count = (...tests: ((row: ScanRow) => boolean)[]) => matched.filter(row => tests.every(test => test(row))).length
+  const shown = matched.filter(row => modeIs(mode)(row) && directionIs(direction)(row) && statusIs(status)(row))
+  const activeFilters = [mode, direction, status].filter(Boolean).length
   const moved = Math.round(base.reduce((sum, row) => sum + (rowUsd(row, bchUsd ?? undefined) ?? 0), 0))
   const loading = (searching && !walletRows) || (!!text && isScanAddress(text) && address !== text)
   const lookups = shown.length || searching ? [] : hashLookups(query)
@@ -189,7 +189,7 @@ export function ScannerView() {
             type="search"
             value={query}
             onChange={event => setQuery(event.target.value)}
-            placeholder="Wallet address, hash or token"
+            placeholder="Address, hash or token"
             spellCheck={false}
             autoComplete="off"
           />
@@ -199,25 +199,27 @@ export function ScannerView() {
             </button>
           )}
         </label>
-        <div className="scanner-filters" role="group" aria-label="Filter by mode">
-          {FILTERS.map(([value, label, content]) => (
-            <button key={value} type="button" aria-pressed={filter === value} aria-label={label} title={label} onClick={() => setFilter(value)}>
-              {content}
-            </button>
-          ))}
-        </div>
+        <button
+          type="button"
+          className="scanner-filter-toggle"
+          aria-expanded={filtersOpen}
+          aria-controls="scanner-filter-panel"
+          data-active={activeFilters > 0 || undefined}
+          onClick={() => setFiltersOpen(open => !open)}
+        >
+          <SlidersHorizontal size={18} aria-hidden />
+          Filter
+          {activeFilters > 0 && <span aria-label={`${activeFilters} active`}>{activeFilters}</span>}
+        </button>
       </div>
 
-      <div className="scanner-tools scanner-tools--facets">
-        <Facets label="Filter by direction" value={direction} options={DIRECTIONS} count={d => matched.filter(row => directionOf(row) === d && inStatus(row)).length} onChange={setDirection} />
-        <Facets
-          label="Filter by status"
-          value={status}
-          options={STATUSES.map(([s, icon]) => [s, statusLabel(s), icon])}
-          count={s => matched.filter(row => row.status === s && inDirection(row)).length}
-          onChange={setStatus}
-        />
-      </div>
+      {filtersOpen && (
+        <div id="scanner-filter-panel" className="scanner-filter-panel">
+          <Choices label="Mode" value={mode} options={MODES} count={m => count(modeIs(m), directionIs(direction), statusIs(status))} onChange={setMode} />
+          <Choices label="Direction" value={direction} options={DIRECTIONS} count={d => count(modeIs(mode), directionIs(d), statusIs(status))} onChange={setDirection} />
+          <Choices label="Status" value={status} options={STATUSES} count={st => count(modeIs(mode), directionIs(direction), statusIs(st))} onChange={setStatus} />
+        </div>
+      )}
 
       {!query && wallets.length > 0 && (
         <div className="scanner-wallets" role="group" aria-label="Your wallets on this device">
