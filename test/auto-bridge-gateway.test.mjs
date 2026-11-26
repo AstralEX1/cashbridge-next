@@ -294,9 +294,40 @@ test('a spent output is only reported when a second node agrees', async () => {
   await withNodes(['first.example', 'second.example'], spentOn(() => Response.json({ result: unspent })), async gateway => {
     await assert.rejects(coin(gateway), /disagree/)
   })
-  await withNodes(['first.example', 'second.example'], spentOn(() => { throw new Error('down') }), async gateway => {
-    await assert.rejects(coin(gateway), /could not be confirmed/)
-  })
+  // The other RPC is down: Fulcrum's UTXO set decides, and only an unreachable Fulcrum leaves it unconfirmed.
+  const originalSocket = globalThis.WebSocket,
+    previousFulcrum = process.env.AUTO_BRIDGE_FULCRUM_URL
+  let fulcrum
+  globalThis.WebSocket = class {
+    static OPEN = 1
+    readyState = 0
+    constructor() {
+      setTimeout(() => (fulcrum === 'down' ? this.onerror?.() : ((this.readyState = 1), this.onopen?.())), 0)
+    }
+    send(data) {
+      const { id, method } = JSON.parse(data)
+      assert.equal(method, 'blockchain.utxo.get_info')
+      setTimeout(() => this.onmessage?.({ data: JSON.stringify({ id, result: fulcrum }) }), 0)
+    }
+    close() {
+      this.readyState = 3
+      this.onclose?.()
+    }
+  }
+  process.env.AUTO_BRIDGE_FULCRUM_URL = 'wss://fulcrum.example:50004'
+  try {
+    for (const [answer, expected] of [[null, undefined], [{ value: 100000 }, /disagree/], ['down', /could not be confirmed/]]) {
+      fulcrum = answer
+      await withNodes(['first.example', 'second.example'], spentOn(() => { throw new Error('down') }), async gateway => {
+        if (expected) await assert.rejects(coin(gateway), expected)
+        else assert.equal(await coin(gateway), undefined)
+      })
+    }
+  } finally {
+    globalThis.WebSocket = originalSocket
+    if (previousFulcrum === undefined) delete process.env.AUTO_BRIDGE_FULCRUM_URL
+    else process.env.AUTO_BRIDGE_FULCRUM_URL = previousFulcrum
+  }
   await withNodes(['only.example'], () => Response.json({ result: null }), async gateway => {
     assert.equal(await coin(gateway), undefined)
   })
