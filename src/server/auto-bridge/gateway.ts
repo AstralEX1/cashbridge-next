@@ -151,7 +151,14 @@ export class BchGateway implements Gateway {
       if (other === null) return
       throw new Error('BCH nodes disagree about an output')
     }
-    throw new Error('BCH node answer could not be confirmed')
+    // No other RPC answered (out of credits or throttled): Fulcrum's own UTXO set is the second opinion (null = spent or unknown).
+    let info: unknown
+    try {
+      info = await this.electrum('blockchain.utxo.get_info', [id, vout])
+    } catch {
+      throw new Error('BCH node answer could not be confirmed')
+    }
+    if (info !== null) throw new Error('BCH nodes disagree about an output')
   }
 
   private async electrum<T>(method: string, params: unknown[]): Promise<T> {
