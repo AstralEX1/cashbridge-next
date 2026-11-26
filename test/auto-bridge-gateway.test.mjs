@@ -373,34 +373,59 @@ test('readiness refuses a synchronized node that cannot look up confirmed transa
   })
 })
 
-test('every node must prove its index even after failover, and failed probes are retried', async () => {
-  for (const fail of [
-    () => { throw new Error('unavailable') },
-    () => Response.json({ result: null }),
-    () => Response.json({ result: '00' }),
-    () => Response.json({ error: { code: -28 } }),
-    () => new Response('not JSON', { status: 502 })
-  ]) {
+test('a node that answers its index probe wrongly stops the worker until it answers right', async () => {
+  for (const fail of [() => Response.json({ result: null }), () => Response.json({ result: '00' })]) {
     let recovered = false
     await withNodes(['first.example', 'second.example'], (host, { method }) => {
-      if (method === 'getblockcount') {
-        if (host === 'first.example') throw new Error('unavailable')
-        return Response.json({ result: 100 })
-      }
       if (method === 'getblockchaininfo') return Response.json({ result: synced })
       if (host === 'first.example' && !recovered) return fail()
       return Response.json({ result: indexProbe.hex })
     }, async (gateway, calls) => {
-      assert.equal(await gateway.tip(), 100)
-      await assert.rejects(gateway.assertReady())
-      await assert.rejects(gateway.assertReady())
+      await assert.rejects(gateway.assertReady(), /hash mismatch/)
+      await assert.rejects(gateway.assertReady(), /hash mismatch/)
       recovered = true
       await gateway.assertReady()
       await gateway.assertReady()
       assert.equal(calls.filter(call => call === 'first.example getrawtransaction').length, 3)
+    })
+  }
+})
+
+test('a node that cannot answer its index probe is left out, not fatal, and proves it on a later pass', async () => {
+  for (const fail of [
+    () => { throw new Error('unavailable') },
+    () => Response.json({ error: { code: -28 } }),
+    () => new Response('{"error":"Out of CU"}', { status: 402 }),
+    () => new Response('not JSON', { status: 502 })
+  ]) {
+    let recovered = false
+    await withNodes(['first.example', 'second.example'], (host, { method }) => {
+      if (method === 'getblockchaininfo') return Response.json({ result: synced })
+      if (host === 'first.example' && !recovered) return fail()
+      if (method === 'getblockcount') return Response.json({ result: 100 })
+      return Response.json({ result: indexProbe.hex })
+    }, async (gateway, calls) => {
+      await gateway.assertReady()
+      const before = calls.length
+      assert.equal(await gateway.tip(), 100)
+      assert.deepEqual(calls.slice(before), ['second.example getblockcount'], 'a node that has not proven its index answers nothing')
+      recovered = true
+      await gateway.assertReady()
+      await gateway.assertReady()
+      assert.equal(calls.filter(call => call === 'first.example getrawtransaction').length, 2)
       assert.equal(calls.filter(call => call === 'second.example getrawtransaction').length, 1)
     })
   }
+})
+
+test('readiness fails when no node can answer its index probe', async () => {
+  await withNodes(['first.example', 'second.example'], (host, { method }) => {
+    if (method === 'getblockchaininfo' && host === 'second.example') return Response.json({ result: synced })
+    return new Response('{"error":"Out of CU"}', { status: 402 })
+  }, async gateway => {
+    await assert.rejects(gateway.assertReady(), /No BCH RPC can be reached/)
+    await assert.rejects(gateway.tip(), /unavailable/)
+  })
 })
 
 test('Fulcrum servers: the configured ones first, then the public ones, without repeats', () => {

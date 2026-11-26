@@ -111,9 +111,10 @@ export class BchGateway implements Gateway {
     return body.result as T
   }
 
+  // A node that could not be reached when it had to prove its index (indexed === false) answers nothing until it proves it.
   private ordered() {
     const now = Date.now()
-    return [...this.nodes].sort((a, b) => Number(a.downUntil > now) - Number(b.downUntil > now))
+    return this.nodes.filter(node => node.indexed !== false).sort((a, b) => Number(a.downUntil > now) - Number(b.downUntil > now))
   }
 
   private async rpcFrom<T>(method: string, params: unknown[], check: Check<T> = present): Promise<{ node: RpcNode; value: T }> {
@@ -129,7 +130,7 @@ export class BchGateway implements Gateway {
         if (!(error instanceof NodeError)) node.downUntil = Date.now() + COOLDOWN_MS
       }
     }
-    throw lastError
+    throw lastError ?? new Error('BCH node RPC unavailable')
   }
 
   private async rpc<T>(method: string, params: unknown[] = [], check?: Check<T>): Promise<T> {
@@ -214,7 +215,9 @@ export class BchGateway implements Gateway {
       )
         throw new Error('BCH mainnet RPC is not synchronized')
     })
-    // Every configured node must prove its transaction index once per process before orders can run.
+    // Every configured node proves its transaction index once per process before it answers for orders. A node without the index
+    // or with a wrong answer stops the worker; one that cannot answer now (out of credits, down, warming up) is left out until it
+    // proves it on a later pass.
     for (const node of this.nodes) {
       if (node.indexed) continue
       try {
@@ -223,9 +226,11 @@ export class BchGateway implements Gateway {
         node.indexed = true
       } catch (error) {
         if (error instanceof NodeError && error.code === -5) throw new Error('A BCH RPC cannot look up confirmed transactions; it needs txindex=1 without pruning')
-        throw error
+        if (error instanceof Error && error.message === 'BCH transaction hash mismatch') throw error
+        node.indexed = false
       }
     }
+    if (!this.nodes.some(node => node.indexed)) throw new Error('No BCH RPC can be reached to prove its transaction index')
   }
   async coin(id: string, vout: number) {
     const { node, value: coin } = await this.rpcFrom<{
